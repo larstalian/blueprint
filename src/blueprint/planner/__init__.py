@@ -2,6 +2,7 @@
 
 from blueprint.planner.core import (
     ExecutionDiff,
+    ExecutionResultArtifact,
     JobManifests,
     JobWorktree,
     Plan,
@@ -18,6 +19,7 @@ from blueprint.planner.core import (
 )
 
 __all__ = [
+    "ExecutionResultArtifact",
     "JobManifests",
     "JobWorktree",
     "Plan",

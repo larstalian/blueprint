@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
+from blueprint.coder import (
+    ClaudeRunError,
+    CodexRunError,
+    CoderExecutionError,
+    create_coder_backend,
+    run_coder_job,
+)
 from blueprint.compiler import CompileError, compile_ir
 from blueprint.ir.validator import validate_ir
 from blueprint.planner import (
@@ -222,6 +230,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="Git base ref used to compute the diff.",
     )
 
+    coder_parser = subparsers.add_parser(
+        "run-coder-job",
+        help="Run one planned job with the selected coder backend in a detached worktree.",
+    )
+    coder_parser.add_argument(
+        "manifest",
+        help="Path to a planned job manifest file.",
+    )
+    coder_parser.add_argument(
+        "instructions",
+        help="Job instructions for the coder. Use '-' to read from stdin.",
+    )
+    coder_parser.add_argument(
+        "--repo",
+        default=".",
+        help="Path to the repository root. Defaults to the current directory.",
+    )
+    coder_parser.add_argument(
+        "--backend",
+        choices=("openai", "codex", "claude"),
+        required=True,
+        help="Coder backend to use.",
+    )
+    coder_parser.add_argument(
+        "--model",
+        default=None,
+        help="Optional model override for the selected backend.",
+    )
+    coder_parser.add_argument(
+        "--base-ref",
+        default="HEAD",
+        help="Git base ref used to create the detached worktree and derive changed files.",
+    )
+
     return parser
 
 
@@ -422,6 +464,51 @@ def main(argv: list[str] | None = None) -> int:
 
         print(execution_diff.diff, end="")
         return 0
+
+    if args.command == "run-coder-job":
+        repo_root = Path(args.repo)
+        manifest_path = Path(args.manifest)
+        instructions = sys.stdin.read() if args.instructions == "-" else args.instructions
+
+        try:
+            backend = create_coder_backend(args.backend, model=args.model)
+            run = run_coder_job(
+                repo_root,
+                manifest_path,
+                instructions,
+                backend,
+                model=args.model,
+                base_ref=args.base_ref,
+            )
+        except (ClaudeRunError, CodexRunError, CoderExecutionError) as exc:
+            print(f"[coder.error] {exc}", file=sys.stderr)
+            return 1
+        except OSError as exc:
+            print(f"[coder.error] {exc}", file=sys.stderr)
+            return 1
+        except ValueError as exc:
+            print(f"[coder.error] {exc}", file=sys.stderr)
+            return 1
+
+        payload = {
+            "backend": run.coder_result.backend,
+            "changed_files": list(run.execution_result.changed_files),
+            "diagnostics": [
+                {
+                    "code": diagnostic.code,
+                    "message": diagnostic.message,
+                    "path": diagnostic.path,
+                }
+                for diagnostic in run.verification.diagnostics
+            ],
+            "execution_result": run.execution_result.path,
+            "final_message": run.coder_result.final_message,
+            "manifest_path": run.worktree.manifest_path,
+            "verification_ok": run.verification.ok,
+            "worktree_path": run.worktree.path,
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0 if run.verification.ok else 1
 
     parser.error(f"unknown command: {args.command}")
     return 2
