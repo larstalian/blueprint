@@ -8,6 +8,7 @@ from blueprint.planner.core import (
     plan_jobs,
     serialize_job_manifest,
     serialize_plan,
+    write_execution_result,
     write_job_manifests,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "plan_jobs",
     "serialize_job_manifest",
     "serialize_plan",
+    "write_execution_result",
     "write_job_manifests",
 ]

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from blueprint.compiler import CompileError, compile_ir
 from blueprint.ir.validator import validate_ir
-from blueprint.planner import plan_jobs, write_job_manifests
+from blueprint.planner import plan_jobs, write_execution_result, write_job_manifests
 from blueprint.revisions import RevisionValidationError, create_revision
 from blueprint.verifier import verify_execution_result, verify_job, verify_repo
 
@@ -130,6 +130,27 @@ def build_parser() -> argparse.ArgumentParser:
         "--repo",
         default=".",
         help="Path to the repository root. Defaults to the current directory.",
+    )
+
+    write_result_parser = subparsers.add_parser(
+        "write-execution-result",
+        help="Write one execution result artifact under .arch/manifests/results.",
+    )
+    write_result_parser.add_argument(
+        "manifest",
+        help="Path to a planned job manifest file.",
+    )
+    write_result_parser.add_argument(
+        "--repo",
+        default=".",
+        help="Path to the repository root. Defaults to the current directory.",
+    )
+    write_result_parser.add_argument(
+        "--changed-file",
+        action="append",
+        dest="changed_files",
+        default=None,
+        help="Relative file path claimed by the job execution. Repeat to provide more than one.",
     )
 
     return parser
@@ -262,6 +283,23 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
         return 1
+
+    if args.command == "write-execution-result":
+        try:
+            artifact = write_execution_result(
+                Path(args.repo),
+                Path(args.manifest),
+                changed_files=args.changed_files or [],
+            )
+        except OSError as exc:
+            print(f"[execution.error] {exc}", file=sys.stderr)
+            return 1
+        except ValueError as exc:
+            print(f"[execution.error] {exc}", file=sys.stderr)
+            return 1
+
+        print(artifact.path)
+        return 0
 
     parser.error(f"unknown command: {args.command}")
     return 2

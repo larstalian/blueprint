@@ -25,6 +25,12 @@ class JobManifests:
     manifest_paths: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class ExecutionResultArtifact:
+    path: str
+    changed_files: tuple[str, ...]
+
+
 def plan_jobs(repo_root: Path, target_units: list[str] | None = None) -> Plan:
     repo_root = Path(repo_root).resolve()
     revision = create_revision(repo_root)
@@ -144,8 +150,19 @@ def build_job_manifest(revision_id: str, job: Mapping[str, Any]) -> Dict[str, An
     return manifest
 
 
+def build_execution_result(job_manifest: str, changed_files: list[str]) -> Dict[str, Any]:
+    return {
+        "changed_files": sorted(set(changed_files)),
+        "job_manifest": job_manifest,
+    }
+
+
 def serialize_job_manifest(manifest: Mapping[str, Any]) -> str:
     return json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+
+
+def serialize_execution_result(result: Mapping[str, Any]) -> str:
+    return json.dumps(result, indent=2, sort_keys=True) + "\n"
 
 
 def job_manifest_path(job_id: str) -> str:
@@ -153,6 +170,43 @@ def job_manifest_path(job_id: str) -> str:
     if not separator or not kind or not name:
         raise ValueError(f"invalid job_id: {job_id}")
     return f".arch/manifests/jobs/{kind}/{name}.json"
+
+
+def job_result_path(job_id: str) -> str:
+    kind, separator, name = job_id.partition(":")
+    if not separator or not kind or not name:
+        raise ValueError(f"invalid job_id: {job_id}")
+    return f".arch/manifests/results/{kind}/{name}.json"
+
+
+def write_execution_result(
+    repo_root: Path,
+    manifest_path: Path,
+    *,
+    changed_files: list[str],
+) -> ExecutionResultArtifact:
+    repo_root = Path(repo_root).resolve()
+    manifest_path = Path(manifest_path)
+    if not manifest_path.is_absolute():
+        manifest_path = (repo_root / manifest_path).resolve()
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    job_id = manifest.get("job_id")
+    if not isinstance(job_id, str) or not job_id:
+        raise ValueError("job manifest is missing a valid job_id")
+
+    result_path = repo_root / job_result_path(job_id)
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    relative_manifest_path = manifest_path.resolve().relative_to(repo_root).as_posix()
+    artifact = build_execution_result(
+        relative_manifest_path,
+        changed_files=changed_files,
+    )
+    result_path.write_text(serialize_execution_result(artifact), encoding="utf-8")
+    return ExecutionResultArtifact(
+        path=job_result_path(job_id),
+        changed_files=tuple(artifact["changed_files"]),
+    )
 
 
 def _as_string_list(value: Any) -> list[str]:
