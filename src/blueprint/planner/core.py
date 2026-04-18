@@ -32,6 +32,13 @@ class ExecutionResultArtifact:
     changed_files: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class JobWorktree:
+    path: str
+    manifest_path: str
+    base_ref: str
+
+
 def plan_jobs(repo_root: Path, target_units: list[str] | None = None) -> Plan:
     repo_root = Path(repo_root).resolve()
     revision = create_revision(repo_root)
@@ -213,6 +220,41 @@ def write_execution_result(
     )
 
 
+def prepare_job_worktree(
+    repo_root: Path,
+    manifest_path: Path,
+    *,
+    base_ref: str = "HEAD",
+) -> JobWorktree:
+    repo_root = Path(repo_root).resolve()
+    manifest_path = Path(manifest_path)
+    if not manifest_path.is_absolute():
+        manifest_path = (repo_root / manifest_path).resolve()
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    job_id = manifest.get("job_id")
+    if not isinstance(job_id, str) or not job_id:
+        raise ValueError("job manifest is missing a valid job_id")
+
+    worktree_root = _worktree_path(repo_root, job_id)
+    if worktree_root.exists():
+        raise ValueError(f"worktree already exists: {worktree_root}")
+
+    worktree_root.parent.mkdir(parents=True, exist_ok=True)
+    _run_git(repo_root, "worktree", "add", "--detach", str(worktree_root), base_ref)
+
+    relative_manifest_path = manifest_path.resolve().relative_to(repo_root).as_posix()
+    target_manifest_path = worktree_root / relative_manifest_path
+    target_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(manifest_path, target_manifest_path)
+
+    return JobWorktree(
+        path=str(worktree_root),
+        manifest_path=str(target_manifest_path),
+        base_ref=base_ref,
+    )
+
+
 def _as_string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -234,10 +276,21 @@ def _changed_files_from_git(repo_root: Path, *, base_ref: str) -> list[str]:
         "--others",
         "--exclude-standard",
     )
-    return sorted(set(diff_files + untracked_files))
+    return sorted(
+        {
+            path
+            for path in diff_files + untracked_files
+            if not path.startswith(".arch/manifests/")
+        }
+    )
 
 
 def _run_git_lines(repo_root: Path, *args: str) -> list[str]:
+    output = _run_git(repo_root, *args)
+    return [line for line in output.splitlines() if line]
+
+
+def _run_git(repo_root: Path, *args: str) -> str:
     try:
         result = subprocess.run(
             ["git", *args],
@@ -250,7 +303,14 @@ def _run_git_lines(repo_root: Path, *args: str) -> list[str]:
         message = exc.stderr.strip() or exc.stdout.strip() or "git command failed"
         raise ValueError(message) from exc
 
-    return [line for line in result.stdout.splitlines() if line]
+    return result.stdout
+
+
+def _worktree_path(repo_root: Path, job_id: str) -> Path:
+    kind, separator, name = job_id.partition(":")
+    if not separator or not kind or not name:
+        raise ValueError(f"invalid job_id: {job_id}")
+    return repo_root.parent / f".{repo_root.name}-worktrees" / kind / name
 
 
 def _resolve_planned_units(

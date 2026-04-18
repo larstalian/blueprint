@@ -8,7 +8,12 @@ from pathlib import Path
 
 from blueprint.compiler import CompileError, compile_ir
 from blueprint.ir.validator import validate_ir
-from blueprint.planner import plan_jobs, write_execution_result, write_job_manifests
+from blueprint.planner import (
+    plan_jobs,
+    prepare_job_worktree,
+    write_execution_result,
+    write_job_manifests,
+)
 from blueprint.revisions import RevisionValidationError, create_revision
 from blueprint.verifier import verify_execution_result, verify_job, verify_repo
 
@@ -158,6 +163,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Git base ref used to derive changed files when --changed-file is omitted.",
     )
 
+    worktree_parser = subparsers.add_parser(
+        "prepare-job-worktree",
+        help="Create a detached worktree for one planned job manifest.",
+    )
+    worktree_parser.add_argument(
+        "manifest",
+        help="Path to a planned job manifest file.",
+    )
+    worktree_parser.add_argument(
+        "--repo",
+        default=".",
+        help="Path to the repository root. Defaults to the current directory.",
+    )
+    worktree_parser.add_argument(
+        "--base-ref",
+        default="HEAD",
+        help="Git ref used as the worktree base.",
+    )
+
     return parser
 
 
@@ -305,6 +329,24 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         print(artifact.path)
+        return 0
+
+    if args.command == "prepare-job-worktree":
+        try:
+            worktree = prepare_job_worktree(
+                Path(args.repo),
+                Path(args.manifest),
+                base_ref=args.base_ref,
+            )
+        except OSError as exc:
+            print(f"[worktree.error] {exc}", file=sys.stderr)
+            return 1
+        except ValueError as exc:
+            print(f"[worktree.error] {exc}", file=sys.stderr)
+            return 1
+
+        print(worktree.path)
+        print(worktree.manifest_path)
         return 0
 
     parser.error(f"unknown command: {args.command}")
