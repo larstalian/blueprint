@@ -1,0 +1,7 @@
+id: payment_service
+kind: service
+language: python
+generation_mode: managed
+layer: service
+files:
+  - app/payments/service.py

@@ -34,9 +34,28 @@ BUILTIN_TYPE_NAMES = {
     "UUID",
 }
 
+IR_MISSING_ARCH_ROOT = "ir.missing_arch_root"
+IR_MISSING_FILE = "ir.missing_file"
+IR_MISSING_DIRECTORY = "ir.missing_directory"
+IR_READ_ERROR = "ir.read_error"
+IR_INVALID_YAML = "ir.invalid_yaml"
+IR_INVALID_ROOT = "ir.invalid_root"
+IR_SCHEMA_VIOLATION = "ir.schema_violation"
+IR_DUPLICATE_ID = "ir.duplicate_id"
+IR_UNKNOWN_CONTRACT = "ir.unknown_contract"
+IR_UNKNOWN_UNIT = "ir.unknown_unit"
+IR_OWNERSHIP_CONFLICT = "ir.ownership_conflict"
+IR_OWNERSHIP_MISMATCH = "ir.ownership_mismatch"
+IR_COMPILER_OWNERSHIP = "ir.compiler_ownership"
+IR_UNKNOWN_TYPE = "ir.unknown_type"
+IR_POLICY_LAYER = "ir.policy_layer"
+IR_FLOW_REFERENCE = "ir.flow_reference"
+IR_COMPILER_LOCK_INVALID = "ir.compiler_lock_invalid"
+
 
 @dataclass(frozen=True)
 class Diagnostic:
+    code: str
     path: str
     message: str
 
@@ -49,8 +68,8 @@ class ValidationReport:
     def ok(self) -> bool:
         return not self.diagnostics
 
-    def add(self, path: str, message: str) -> None:
-        self.diagnostics.append(Diagnostic(path=path, message=message))
+    def add(self, code: str, path: str, message: str) -> None:
+        self.diagnostics.append(Diagnostic(code=code, path=path, message=message))
 
 
 def validate_ir(repo_root: Path) -> ValidationReport:
@@ -59,7 +78,7 @@ def validate_ir(repo_root: Path) -> ValidationReport:
     report = ValidationReport()
 
     if not arch_root.is_dir():
-        report.add(".arch", "missing .arch directory")
+        report.add(IR_MISSING_ARCH_ROOT, ".arch", "missing .arch directory")
         return report
 
     system_doc = _load_required_document(
@@ -124,7 +143,11 @@ def _load_required_document(
     report: ValidationReport,
 ) -> Optional[Dict[str, Any]]:
     if not path.is_file():
-        report.add(_relative_path(path, repo_root), "missing required file")
+        report.add(
+            IR_MISSING_FILE,
+            _relative_path(path, repo_root),
+            "missing required file",
+        )
         return None
     return _load_document(repo_root=repo_root, path=path, schema_name=schema_name, report=report)
 
@@ -145,7 +168,11 @@ def _load_collection(
     report: ValidationReport,
 ) -> List[Dict[str, Any]]:
     if not directory.is_dir():
-        report.add(_relative_path(directory, repo_root), "missing required directory")
+        report.add(
+            IR_MISSING_DIRECTORY,
+            _relative_path(directory, repo_root),
+            "missing required directory",
+        )
         return []
 
     documents: List[Dict[str, Any]] = []
@@ -170,26 +197,38 @@ def _load_document(
     try:
         raw_text = path.read_text(encoding="utf-8")
     except OSError as exc:
-        report.add(_relative_path(path, repo_root), f"could not read file: {exc}")
+        report.add(
+            IR_READ_ERROR,
+            _relative_path(path, repo_root),
+            f"could not read file: {exc}",
+        )
         return None
 
     try:
         document = yaml.safe_load(raw_text)
     except yaml.YAMLError as exc:
-        report.add(_relative_path(path, repo_root), f"invalid YAML: {exc}")
+        report.add(
+            IR_INVALID_YAML,
+            _relative_path(path, repo_root),
+            f"invalid YAML: {exc}",
+        )
         return None
 
     if document is None:
         document = {}
 
     if not isinstance(document, dict):
-        report.add(_relative_path(path, repo_root), "root document must be a mapping")
+        report.add(
+            IR_INVALID_ROOT,
+            _relative_path(path, repo_root),
+            "root document must be a mapping",
+        )
         return None
 
     validator = _schema_validator(schema_name)
     for error in sorted(validator.iter_errors(document), key=_schema_error_sort_key):
         location = _format_schema_error_path(path, repo_root, error.path)
-        report.add(location, error.message)
+        report.add(IR_SCHEMA_VIOLATION, location, error.message)
 
     if schema_name == "compiler_lock":
         _validate_compiler_lock_document(
@@ -263,6 +302,7 @@ def _validate_cross_file_rules(
                 owner = managed_unit_files.get(owned_file)
                 if owner is not None:
                     report.add(
+                        IR_OWNERSHIP_CONFLICT,
                         unit_path,
                         f"file '{owned_file}' is already owned by managed unit '{owner}'",
                     )
@@ -272,6 +312,7 @@ def _validate_cross_file_rules(
         for contract_id in _as_string_list(unit.get("provides")):
             if contract_id not in contract_ids:
                 report.add(
+                    IR_UNKNOWN_CONTRACT,
                     unit_path,
                     f"unknown provided contract '{contract_id}'",
                 )
@@ -279,6 +320,7 @@ def _validate_cross_file_rules(
         for dependency_id in _as_string_list(unit.get("requires")):
             if dependency_id not in unit_ids:
                 report.add(
+                    IR_UNKNOWN_UNIT,
                     unit_path,
                     f"unknown required unit '{dependency_id}'",
                 )
@@ -292,6 +334,7 @@ def _validate_cross_file_rules(
             owner = flattened_ownership.get(owned_file)
             if owner is not None:
                 report.add(
+                    IR_OWNERSHIP_CONFLICT,
                     ".arch/ownership.yaml",
                     f"file '{owned_file}' is assigned to both '{owner}' and '{unit_id}'",
                 )
@@ -302,6 +345,7 @@ def _validate_cross_file_rules(
     overlap = compiler_files.intersection(flattened_ownership)
     for owned_file in sorted(overlap):
         report.add(
+            IR_OWNERSHIP_CONFLICT,
             ".arch/ownership.yaml",
             f"file '{owned_file}' cannot be both compiler-owned and unit-owned",
         )
@@ -313,12 +357,14 @@ def _validate_cross_file_rules(
             continue
         if module_path not in compiler_files:
             report.add(
+                IR_COMPILER_OWNERSHIP,
                 _path_with_fragment(contract_path, "module"),
                 f"contract module '{module_path}' must be compiler-owned",
             )
         overlapping_units = sorted(set(unit_files.get(module_path, [])))
         if overlapping_units:
             report.add(
+                IR_COMPILER_OWNERSHIP,
                 _path_with_fragment(contract_path, "module"),
                 (
                     f"contract module '{module_path}' cannot overlap unit-owned file(s): "
@@ -371,12 +417,14 @@ def _validate_cross_file_rules(
             continue
         if module_path not in compiler_files:
             report.add(
+                IR_COMPILER_OWNERSHIP,
                 _path_with_fragment(data_model_path, "module"),
                 f"data model module '{module_path}' must be compiler-owned",
             )
         overlapping_units = sorted(set(unit_files.get(module_path, [])))
         if overlapping_units:
             report.add(
+                IR_COMPILER_OWNERSHIP,
                 _path_with_fragment(data_model_path, "module"),
                 (
                     f"data model module '{module_path}' cannot overlap unit-owned file(s): "
@@ -400,6 +448,7 @@ def _validate_cross_file_rules(
 
     if set(expected_units) != set(actual_units):
         report.add(
+            IR_OWNERSHIP_MISMATCH,
             ".arch/ownership.yaml",
             "unit_files must match the managed unit set declared in .arch/units/",
         )
@@ -408,6 +457,7 @@ def _validate_cross_file_rules(
         actual_files = actual_units.get(unit_id, [])
         if expected_files != actual_files:
             report.add(
+                IR_OWNERSHIP_MISMATCH,
                 ".arch/ownership.yaml",
                 "unit_files must match the files of each managed unit exactly",
             )
@@ -422,12 +472,14 @@ def _validate_cross_file_rules(
     for layer_name, target_layers in allowed_dependencies.items():
         if layer_name not in layers:
             report.add(
+                IR_POLICY_LAYER,
                 _path_with_fragment(policies_path, "allowed_dependencies", layer_name),
                 f"allowed_dependencies source layer '{layer_name}' is not declared in layers",
             )
         for target_layer in target_layers:
             if target_layer not in layers:
                 report.add(
+                    IR_POLICY_LAYER,
                     _path_with_fragment(policies_path, "allowed_dependencies", layer_name),
                     f"allowed_dependencies target layer '{target_layer}' is not declared in layers",
                 )
@@ -441,6 +493,7 @@ def _validate_cross_file_rules(
     ):
         if used_layer not in allowed_dependencies:
             report.add(
+                IR_POLICY_LAYER,
                 _path_with_fragment(policies_path, "allowed_dependencies"),
                 f"missing dependency rule for layer '{used_layer}'",
             )
@@ -451,12 +504,14 @@ def _validate_cross_file_rules(
         unit_layer = _as_string(unit.get("layer"))
         if layers and not unit_layer:
             report.add(
+                IR_POLICY_LAYER,
                 unit_path,
                 "layer is required when dependency policies are defined",
             )
             continue
         if unit_layer and unit_layer not in layers:
             report.add(
+                IR_POLICY_LAYER,
                 _path_with_fragment(unit_path, "layer"),
                 f"unknown layer '{unit_layer}'",
             )
@@ -472,12 +527,14 @@ def _validate_cross_file_rules(
             dependency_layer = unit_layers.get(dependency_id)
             if not dependency_layer:
                 report.add(
+                    IR_POLICY_LAYER,
                     unit_path,
                     f"required unit '{dependency_id}' is missing a layer",
                 )
                 continue
             if dependency_layer not in allowed_target_layers:
                 report.add(
+                    IR_POLICY_LAYER,
                     unit_path,
                     (
                         f"unit '{unit_id}' in layer '{unit_layer}' cannot depend on "
@@ -491,6 +548,7 @@ def _validate_cross_file_rules(
         trigger_unit = _as_string(trigger.get("unit"))
         if trigger_unit and trigger_unit not in unit_ids:
             report.add(
+                IR_FLOW_REFERENCE,
                 _path_with_fragment(flow_path, "trigger", "unit"),
                 f"unknown trigger unit '{trigger_unit}'",
             )
@@ -498,6 +556,7 @@ def _validate_cross_file_rules(
         trigger_contract = _as_string(trigger.get("contract"))
         if trigger_contract and trigger_contract not in contract_ids:
             report.add(
+                IR_FLOW_REFERENCE,
                 _path_with_fragment(flow_path, "trigger", "contract"),
                 f"unknown trigger contract '{trigger_contract}'",
             )
@@ -510,6 +569,7 @@ def _validate_cross_file_rules(
             provided_contracts = set(_as_string_list(units_by_id[trigger_unit].get("provides")))
             if trigger_contract not in provided_contracts:
                 report.add(
+                    IR_FLOW_REFERENCE,
                     _path_with_fragment(flow_path, "trigger", "contract"),
                     f"trigger contract '{trigger_contract}' is not provided by unit '{trigger_unit}'",
                 )
@@ -524,6 +584,7 @@ def _validate_cross_file_rules(
             unit_prefix, separator, method_name = call_target.partition(".")
             if not separator or not unit_prefix or not method_name:
                 report.add(
+                    IR_FLOW_REFERENCE,
                     _path_with_fragment(flow_path, "steps", step_index, "call"),
                     f"flow call '{call_target}' must be in '<unit>.<method>' form",
                 )
@@ -531,6 +592,7 @@ def _validate_cross_file_rules(
 
             if unit_prefix not in unit_ids:
                 report.add(
+                    IR_FLOW_REFERENCE,
                     _path_with_fragment(flow_path, "steps", step_index, "call"),
                     f"unknown flow call target '{call_target}'",
                 )
@@ -545,6 +607,7 @@ def _validate_cross_file_rules(
             }
             if unit_contract_methods and method_name not in unit_contract_methods:
                 report.add(
+                    IR_FLOW_REFERENCE,
                     _path_with_fragment(flow_path, "steps", step_index, "call"),
                     (
                         f"flow call '{call_target}' does not match any provided contract "
@@ -567,6 +630,7 @@ def _check_unique_ids(
         previous_file = global_ids.get(identifier)
         if previous_file is not None:
             report.add(
+                IR_DUPLICATE_ID,
                 document["__file__"],
                 f"duplicate ID '{identifier}' already defined in '{previous_file}'",
             )
@@ -593,7 +657,11 @@ def _validate_compiler_lock_document(
     try:
         datetime.fromisoformat(candidate)
     except ValueError:
-        report.add(f"{path}#generated_at", f"'{generated_at}' is not a 'date-time'")
+        report.add(
+            IR_COMPILER_LOCK_INVALID,
+            f"{path}#generated_at",
+            f"'{generated_at}' is not a 'date-time'",
+        )
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -644,6 +712,7 @@ def _validate_type_expression(
     short_name = expression.rsplit(".", 1)[-1]
     if short_name not in BUILTIN_TYPE_NAMES and short_name not in data_model_symbols:
         report.add(
+            IR_UNKNOWN_TYPE,
             path,
             f"{field} references unknown type '{expression}'",
         )

@@ -1,0 +1,14 @@
+schema_version: 1
+system_id: invalid
+language: python
+python:
+  version: "3.13"
+  package_root: app
+compiler:
+  generated_root: app
+  tests_root: tests
+conventions:
+  test_framework: pytest
+  type_checker: pyright
+  formatter: ruff
+

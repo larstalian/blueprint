@@ -12,6 +12,32 @@ def test_validate_ir_accepts_valid_repo(tmp_path: Path) -> None:
     assert report.ok, report.diagnostics
 
 
+def test_validate_ir_reports_stable_diagnostic_codes(tmp_path: Path) -> None:
+    write_minimal_repo(tmp_path)
+    write_file(
+        tmp_path / ".arch/contracts/payment_authorizer.yaml",
+        """
+        id: payment_authorizer
+        kind: protocol
+        module: app/payments/service.py
+        symbol: PaymentAuthorizer
+        methods:
+          - name: authorize
+            params:
+              - name: request
+                type: MissingRequest
+            returns: PaymentResult
+        """,
+    )
+
+    report = validate_ir(tmp_path)
+
+    assert not report.ok
+    codes = {item.code for item in report.diagnostics}
+    assert "ir.compiler_ownership" in codes
+    assert "ir.unknown_type" in codes
+
+
 def test_validate_ir_rejects_ownership_drift(tmp_path: Path) -> None:
     write_minimal_repo(tmp_path)
     write_file(

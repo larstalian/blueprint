@@ -1,0 +1,8 @@
+unit_files:
+  payment_service:
+    - app/payments/service.py
+compiler_files:
+  - tests/contracts/test_payment_authorizer.py
+  - app/payments/models.py
+  - app/payments/contracts.py
+

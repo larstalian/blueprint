@@ -1,0 +1,8 @@
+id: payment_gateway
+kind: adapter
+language: python
+generation_mode: opaque
+layer: infra
+files:
+  - app/payments/gateway.py
+

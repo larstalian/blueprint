@@ -1,0 +1,10 @@
+id: payment_request
+kind: dataclass
+module: app/payments/models.py
+symbol: PaymentRequest
+fields:
+  - name: amount
+    type: Decimal
+  - name: currency
+    type: str
+
