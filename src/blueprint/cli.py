@@ -10,7 +10,7 @@ from blueprint.compiler import CompileError, compile_ir
 from blueprint.ir.validator import validate_ir
 from blueprint.planner import plan_jobs, write_job_manifests
 from blueprint.revisions import RevisionValidationError, create_revision
-from blueprint.verifier import verify_job, verify_repo
+from blueprint.verifier import verify_execution_result, verify_job, verify_repo
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -116,6 +116,20 @@ def build_parser() -> argparse.ArgumentParser:
         dest="changed_files",
         default=None,
         help="Relative file path claimed by the job execution. Repeat to provide more than one.",
+    )
+
+    verify_result_parser = subparsers.add_parser(
+        "verify-execution-result",
+        help="Verify one execution result artifact against the current repo state.",
+    )
+    verify_result_parser.add_argument(
+        "result",
+        help="Path to an execution result JSON file.",
+    )
+    verify_result_parser.add_argument(
+        "--repo",
+        default=".",
+        help="Path to the repository root. Defaults to the current directory.",
     )
 
     return parser
@@ -227,6 +241,19 @@ def main(argv: list[str] | None = None) -> int:
         )
         if report.ok:
             print("Job verification passed.")
+            return 0
+
+        for diagnostic in report.diagnostics:
+            print(
+                f"{diagnostic.path}: [{diagnostic.code}] {diagnostic.message}",
+                file=sys.stderr,
+            )
+        return 1
+
+    if args.command == "verify-execution-result":
+        report = verify_execution_result(Path(args.repo), Path(args.result))
+        if report.ok:
+            print("Execution result verification passed.")
             return 0
 
         for diagnostic in report.diagnostics:

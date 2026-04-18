@@ -22,6 +22,7 @@ VERIFY_PYTHON_SYNTAX = "verify.python_syntax"
 VERIFY_STALE_REVISION = "verify.stale_revision"
 VERIFY_JOB_MANIFEST = "verify.job_manifest"
 VERIFY_CHANGED_FILE_SCOPE = "verify.changed_file_scope"
+VERIFY_EXECUTION_RESULT = "verify.execution_result"
 
 
 @dataclass
@@ -200,6 +201,60 @@ def verify_job(
         owned_files=_as_string_list(expected_job.get("owned_files")),
     )
     return report
+
+
+def verify_execution_result(repo_root: Path, result_path: Path) -> VerificationReport:
+    repo_root = Path(repo_root).resolve()
+    result_path = Path(result_path)
+    if not result_path.is_absolute():
+        result_path = (repo_root / result_path).resolve()
+
+    try:
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        report = VerificationReport()
+        report.add(
+            VERIFY_EXECUTION_RESULT,
+            _relative_to_repo(repo_root, result_path),
+            f"could not read execution result: {exc}",
+        )
+        return report
+    except json.JSONDecodeError as exc:
+        report = VerificationReport()
+        report.add(
+            VERIFY_EXECUTION_RESULT,
+            _relative_to_repo(repo_root, result_path),
+            f"invalid JSON: {exc.msg}",
+        )
+        return report
+
+    manifest = result.get("job_manifest")
+    if not isinstance(manifest, str) or not manifest:
+        report = VerificationReport()
+        report.add(
+            VERIFY_EXECUTION_RESULT,
+            _relative_to_repo(repo_root, result_path),
+            "execution result is missing a valid job_manifest",
+        )
+        return report
+
+    changed_files = result.get("changed_files")
+    if not isinstance(changed_files, list) or any(
+        not isinstance(item, str) or not item for item in changed_files
+    ):
+        report = VerificationReport()
+        report.add(
+            VERIFY_EXECUTION_RESULT,
+            _relative_to_repo(repo_root, result_path),
+            "execution result is missing a valid changed_files list",
+        )
+        return report
+
+    return verify_job(
+        repo_root,
+        Path(manifest),
+        changed_files=sorted(set(changed_files)),
+    )
 
 
 def _managed_unit_files(snapshot: dict[str, object]) -> list[str]:
