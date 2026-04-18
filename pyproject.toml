@@ -30,3 +30,5 @@ where = ["src"]
 [tool.setuptools.package-data]
 "blueprint.schemas" = ["v1/*.json"]
 
+[tool.pytest.ini_options]
+norecursedirs = ["tests/fixtures"]

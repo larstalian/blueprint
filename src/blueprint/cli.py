@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from blueprint.compiler import CompileError, compile_ir
 from blueprint.ir.validator import validate_ir
 from blueprint.revisions import RevisionValidationError, create_revision
 
@@ -30,6 +31,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Create a canonical revision hash from the .arch model.",
     )
     revision_parser.add_argument(
+        "repo",
+        nargs="?",
+        default=".",
+        help="Path to the repository root. Defaults to the current directory.",
+    )
+
+    compile_parser = subparsers.add_parser(
+        "compile",
+        help="Emit deterministic compiler-owned files from the .arch model.",
+    )
+    compile_parser.add_argument(
         "repo",
         nargs="?",
         default=".",
@@ -68,6 +80,24 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         print(revision.revision_id)
+        return 0
+
+    if args.command == "compile":
+        try:
+            result = compile_ir(Path(args.repo))
+        except RevisionValidationError as exc:
+            for diagnostic in exc.report.diagnostics:
+                print(
+                    f"{diagnostic.path}: [{diagnostic.code}] {diagnostic.message}",
+                    file=sys.stderr,
+                )
+            return 1
+        except CompileError as exc:
+            print(f"[compile.error] {exc}", file=sys.stderr)
+            return 1
+
+        for emitted_file in result.emitted_files:
+            print(emitted_file)
         return 0
 
     parser.error(f"unknown command: {args.command}")
