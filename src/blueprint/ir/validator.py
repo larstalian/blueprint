@@ -7,10 +7,9 @@ from datetime import datetime
 from importlib import resources
 import json
 from pathlib import Path
-import re
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator
 import yaml
 
 
@@ -23,26 +22,17 @@ REQUIRED_COLLECTIONS = (
 OPTIONAL_FILES = (("manifests/compiler.lock.json", "compiler_lock"),)
 
 BUILTIN_TYPE_NAMES = {
-    "Any",
     "Decimal",
-    "Literal",
-    "Mapping",
     "None",
-    "Optional",
-    "Sequence",
-    "Union",
     "bool",
     "bytes",
-    "dict",
+    "date",
+    "datetime",
     "float",
-    "frozenset",
     "int",
-    "list",
-    "set",
     "str",
-    "tuple",
+    "UUID",
 }
-TYPE_NAME_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_.]*")
 
 
 @dataclass(frozen=True)
@@ -235,27 +225,36 @@ def _validate_cross_file_rules(
     ):
         _check_unique_ids(report, global_ids, kind, documents)
 
-    units_by_id = {
-        document["id"]: document
-        for document in units
-        if isinstance(document.get("id"), str)
-    }
-    contracts_by_id = {
-        document["id"]: document
-        for document in contracts
-        if isinstance(document.get("id"), str)
-    }
+    units_by_id = {}
+    unit_layers: Dict[str, Optional[str]] = {}
+    unit_files: Dict[str, List[str]] = {}
+    for unit in units:
+        unit_id = _as_string(unit.get("id"))
+        if not unit_id:
+            continue
+        units_by_id.setdefault(unit_id, unit)
+        unit_layers[unit_id] = _as_string(unit.get("layer"))
+        for owned_file in _as_string_list(unit.get("files")):
+            unit_files.setdefault(owned_file, []).append(unit_id)
+
+    contracts_by_id = {}
+    for contract in contracts:
+        contract_id = _as_string(contract.get("id"))
+        if contract_id:
+            contracts_by_id.setdefault(contract_id, contract)
+
     data_model_symbols = {
-        document["symbol"]
-        for document in data_models
-        if isinstance(document.get("symbol"), str)
+        symbol
+        for data_model in data_models
+        if (symbol := _as_string(data_model.get("symbol"))) is not None
     }
     unit_ids = set(units_by_id)
     contract_ids = set(contracts_by_id)
 
     managed_unit_files: Dict[str, str] = {}
     for unit in units:
-        unit_id = unit.get("id")
+        unit_path = _document_path(unit)
+        unit_id = _as_string(unit.get("id"))
         if not unit_id:
             continue
 
@@ -264,7 +263,7 @@ def _validate_cross_file_rules(
                 owner = managed_unit_files.get(owned_file)
                 if owner is not None:
                     report.add(
-                        unit["__file__"],
+                        unit_path,
                         f"file '{owned_file}' is already owned by managed unit '{owner}'",
                     )
                     continue
@@ -273,14 +272,14 @@ def _validate_cross_file_rules(
         for contract_id in _as_string_list(unit.get("provides")):
             if contract_id not in contract_ids:
                 report.add(
-                    unit["__file__"],
+                    unit_path,
                     f"unknown provided contract '{contract_id}'",
                 )
 
         for dependency_id in _as_string_list(unit.get("requires")):
             if dependency_id not in unit_ids:
                 report.add(
-                    unit["__file__"],
+                    unit_path,
                     f"unknown required unit '{dependency_id}'",
                 )
 
@@ -308,50 +307,81 @@ def _validate_cross_file_rules(
         )
 
     for contract in contracts:
-        module_path = contract.get("module")
+        contract_path = _document_path(contract)
+        module_path = _as_string(contract.get("module"))
         if not module_path:
             continue
         if module_path not in compiler_files:
             report.add(
-                contract["__file__"],
+                _path_with_fragment(contract_path, "module"),
                 f"contract module '{module_path}' must be compiler-owned",
             )
+        overlapping_units = sorted(set(unit_files.get(module_path, [])))
+        if overlapping_units:
+            report.add(
+                _path_with_fragment(contract_path, "module"),
+                (
+                    f"contract module '{module_path}' cannot overlap unit-owned file(s): "
+                    f"{', '.join(overlapping_units)}"
+                ),
+            )
 
-        for method in _as_list(contract.get("methods")):
+        for method_index, method in enumerate(_as_list(contract.get("methods"))):
             if not isinstance(method, Mapping):
                 continue
-            for param in _as_list(method.get("params")):
+            method_name = _as_string(method.get("name")) or "<unknown>"
+            for param_index, param in enumerate(_as_list(method.get("params"))):
                 if not isinstance(param, Mapping):
                     continue
-                type_name = param.get("type")
+                type_name = _as_string(param.get("type"))
                 if not type_name:
                     continue
                 _validate_type_expression(
                     report=report,
-                    path=contract["__file__"],
-                    field=f"method '{method.get('name', '<unknown>')}' parameter '{param.get('name', '<unknown>')}'",
+                    path=_path_with_fragment(
+                        contract_path,
+                        "methods",
+                        method_index,
+                        "params",
+                        param_index,
+                        "type",
+                    ),
+                    field=(
+                        f"method '{method_name}' parameter "
+                        f"'{_as_string(param.get('name')) or '<unknown>'}'"
+                    ),
                     expression=type_name,
                     data_model_symbols=data_model_symbols,
                 )
 
-            return_type = method.get("returns")
+            return_type = _as_string(method.get("returns"))
             if return_type:
                 _validate_type_expression(
                     report=report,
-                    path=contract["__file__"],
-                    field=f"method '{method.get('name', '<unknown>')}' return type",
+                    path=_path_with_fragment(contract_path, "methods", method_index, "returns"),
+                    field=f"method '{method_name}' return type",
                     expression=return_type,
                     data_model_symbols=data_model_symbols,
                 )
 
     for data_model in data_models:
-        module_path = data_model.get("module")
+        data_model_path = _document_path(data_model)
+        module_path = _as_string(data_model.get("module"))
         if not module_path:
             continue
         if module_path not in compiler_files:
             report.add(
-                data_model["__file__"],
+                _path_with_fragment(data_model_path, "module"),
                 f"data model module '{module_path}' must be compiler-owned",
+            )
+        overlapping_units = sorted(set(unit_files.get(module_path, [])))
+        if overlapping_units:
+            report.add(
+                _path_with_fragment(data_model_path, "module"),
+                (
+                    f"data model module '{module_path}' cannot overlap unit-owned file(s): "
+                    f"{', '.join(overlapping_units)}"
+                ),
             )
 
     expected_units = {
@@ -382,113 +412,145 @@ def _validate_cross_file_rules(
                 "unit_files must match the files of each managed unit exactly",
             )
 
-    layers = set(policies_doc.get("layers", []))
-    allowed_dependencies = _as_mapping(policies_doc.get("allowed_dependencies"))
+    policies_path = _document_path(policies_doc, ".arch/policies.yaml")
+    layers = set(_as_string_list(policies_doc.get("layers")))
+    allowed_dependencies = {
+        layer_name: _as_string_list(target_layers)
+        for layer_name, target_layers in _as_mapping(policies_doc.get("allowed_dependencies")).items()
+        if isinstance(layer_name, str)
+    }
     for layer_name, target_layers in allowed_dependencies.items():
-        if not isinstance(layer_name, str):
-            continue
         if layer_name not in layers:
             report.add(
-                ".arch/policies.yaml",
+                _path_with_fragment(policies_path, "allowed_dependencies", layer_name),
                 f"allowed_dependencies source layer '{layer_name}' is not declared in layers",
             )
-        for target_layer in _as_string_list(target_layers):
+        for target_layer in target_layers:
             if target_layer not in layers:
                 report.add(
-                    ".arch/policies.yaml",
+                    _path_with_fragment(policies_path, "allowed_dependencies", layer_name),
                     f"allowed_dependencies target layer '{target_layer}' is not declared in layers",
                 )
 
+    for used_layer in sorted(
+        {
+            unit_layer
+            for unit_layer in unit_layers.values()
+            if unit_layer is not None and unit_layer in layers
+        }
+    ):
+        if used_layer not in allowed_dependencies:
+            report.add(
+                _path_with_fragment(policies_path, "allowed_dependencies"),
+                f"missing dependency rule for layer '{used_layer}'",
+            )
+
     for unit in units:
-        unit_id = unit.get("id")
-        unit_layer = unit.get("layer")
+        unit_path = _document_path(unit)
+        unit_id = _as_string(unit.get("id"))
+        unit_layer = _as_string(unit.get("layer"))
         if layers and not unit_layer:
             report.add(
-                unit["__file__"],
-                "layer is required when policies.yaml declares layers",
+                unit_path,
+                "layer is required when dependency policies are defined",
             )
             continue
         if unit_layer and unit_layer not in layers:
             report.add(
-                unit["__file__"],
+                _path_with_fragment(unit_path, "layer"),
                 f"unknown layer '{unit_layer}'",
             )
 
         if not unit_id or not unit_layer or unit_layer not in layers:
             continue
 
+        if unit_layer not in allowed_dependencies:
+            continue
+
         allowed_target_layers = set(allowed_dependencies.get(unit_layer, []))
         for dependency_id in _as_string_list(unit.get("requires")):
-            dependency = units_by_id.get(dependency_id)
-            if dependency is None:
-                continue
-            dependency_layer = dependency.get("layer")
+            dependency_layer = unit_layers.get(dependency_id)
             if not dependency_layer:
                 report.add(
-                    unit["__file__"],
+                    unit_path,
                     f"required unit '{dependency_id}' is missing a layer",
                 )
                 continue
             if dependency_layer not in allowed_target_layers:
                 report.add(
-                    unit["__file__"],
-                    f"dependency on unit '{dependency_id}' violates layer policy '{unit_layer} -> {dependency_layer}'",
+                    unit_path,
+                    (
+                        f"unit '{unit_id}' in layer '{unit_layer}' cannot depend on "
+                        f"'{dependency_id}' in layer '{dependency_layer}'"
+                    ),
                 )
 
     for flow in flows:
+        flow_path = _document_path(flow)
         trigger = _as_mapping(flow.get("trigger"))
-        trigger_unit = trigger.get("unit")
+        trigger_unit = _as_string(trigger.get("unit"))
         if trigger_unit and trigger_unit not in unit_ids:
             report.add(
-                flow["__file__"],
+                _path_with_fragment(flow_path, "trigger", "unit"),
                 f"unknown trigger unit '{trigger_unit}'",
             )
 
-        trigger_contract = trigger.get("contract")
+        trigger_contract = _as_string(trigger.get("contract"))
         if trigger_contract and trigger_contract not in contract_ids:
             report.add(
-                flow["__file__"],
+                _path_with_fragment(flow_path, "trigger", "contract"),
                 f"unknown trigger contract '{trigger_contract}'",
             )
-        if trigger_unit and trigger_contract and trigger_unit in units_by_id:
-            unit_contracts = set(units_by_id[trigger_unit].get("provides", []))
-            if trigger_contract not in unit_contracts:
+        if (
+            trigger_unit
+            and trigger_contract
+            and trigger_unit in units_by_id
+            and trigger_contract in contract_ids
+        ):
+            provided_contracts = set(_as_string_list(units_by_id[trigger_unit].get("provides")))
+            if trigger_contract not in provided_contracts:
                 report.add(
-                    flow["__file__"],
+                    _path_with_fragment(flow_path, "trigger", "contract"),
                     f"trigger contract '{trigger_contract}' is not provided by unit '{trigger_unit}'",
                 )
 
-        for step in _as_list(flow.get("steps")):
+        for step_index, step in enumerate(_as_list(flow.get("steps"))):
             if not isinstance(step, Mapping):
                 continue
-            if "call" in step:
-                call_target = step["call"]
-                unit_prefix, separator, method_name = call_target.partition(".")
-                if unit_prefix not in unit_ids:
-                    report.add(
-                        flow["__file__"],
-                        f"unknown flow call target '{call_target}'",
-                    )
-                    continue
+            call_target = _as_string(step.get("call"))
+            if not call_target:
+                continue
 
-                if not separator or not method_name:
-                    report.add(
-                        flow["__file__"],
-                        f"flow call '{call_target}' must be in '<unit>.<method>' form",
-                    )
-                    continue
+            unit_prefix, separator, method_name = call_target.partition(".")
+            if not separator or not unit_prefix or not method_name:
+                report.add(
+                    _path_with_fragment(flow_path, "steps", step_index, "call"),
+                    f"flow call '{call_target}' must be in '<unit>.<method>' form",
+                )
+                continue
 
-                unit_contract_methods = {
-                    method.get("name")
-                    for contract_id in _as_string_list(units_by_id[unit_prefix].get("provides"))
-                    for method in _as_list(contracts_by_id.get(contract_id, {}).get("methods"))
-                    if isinstance(method.get("name"), str)
-                }
-                if unit_contract_methods and method_name not in unit_contract_methods:
-                    report.add(
-                        flow["__file__"],
-                        f"flow call '{call_target}' does not match any provided contract method on unit '{unit_prefix}'",
-                    )
+            if unit_prefix not in unit_ids:
+                report.add(
+                    _path_with_fragment(flow_path, "steps", step_index, "call"),
+                    f"unknown flow call target '{call_target}'",
+                )
+                continue
+
+            unit_contract_methods = {
+                contract_method_name
+                for contract_id in _as_string_list(units_by_id[unit_prefix].get("provides"))
+                for method in _as_list(contracts_by_id.get(contract_id, {}).get("methods"))
+                if isinstance(method, Mapping)
+                if (contract_method_name := _as_string(method.get("name"))) is not None
+            }
+            if unit_contract_methods and method_name not in unit_contract_methods:
+                report.add(
+                    _path_with_fragment(flow_path, "steps", step_index, "call"),
+                    (
+                        f"flow call '{call_target}' does not match any provided contract "
+                        f"method on unit '{unit_prefix}'"
+                    ),
+                )
 
 
 def _check_unique_ids(
@@ -498,7 +560,7 @@ def _check_unique_ids(
     documents: Iterable[Mapping[str, Any]],
 ) -> None:
     for document in documents:
-        identifier = document.get("id")
+        identifier = _as_string(document.get("id"))
         if not identifier:
             continue
 
@@ -515,7 +577,7 @@ def _check_unique_ids(
 def _schema_validator(name: str) -> Draft202012Validator:
     schema_path = resources.files("blueprint.schemas.v1").joinpath(f"{name}.schema.json")
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    return Draft202012Validator(schema, format_checker=FormatChecker())
+    return Draft202012Validator(schema)
 
 
 def _validate_compiler_lock_document(
@@ -546,10 +608,30 @@ def _as_mapping(value: Any) -> Mapping[str, Any]:
     return {}
 
 
+def _as_string(value: Any) -> Optional[str]:
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
 def _as_string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
-    return [item for item in value if isinstance(item, str)]
+    return [item for item in value if isinstance(item, str) and item]
+
+
+def _document_path(document: Mapping[str, Any], default: str = "") -> str:
+    path = document.get("__file__")
+    if isinstance(path, str):
+        return path
+    return default
+
+
+def _path_with_fragment(path: str, *parts: Any) -> str:
+    fragment = ".".join(str(part) for part in parts)
+    if not fragment:
+        return path
+    return f"{path}#{fragment}"
 
 
 def _validate_type_expression(
@@ -559,19 +641,11 @@ def _validate_type_expression(
     expression: str,
     data_model_symbols: set[str],
 ) -> None:
-    unknown_names = []
-    for name in TYPE_NAME_PATTERN.findall(expression):
-        short_name = name.rsplit(".", 1)[-1]
-        if short_name in BUILTIN_TYPE_NAMES:
-            continue
-        if short_name in data_model_symbols:
-            continue
-        unknown_names.append(name)
-
-    if unknown_names:
+    short_name = expression.rsplit(".", 1)[-1]
+    if short_name not in BUILTIN_TYPE_NAMES and short_name not in data_model_symbols:
         report.add(
             path,
-            f"{field} references unknown type(s): {', '.join(sorted(set(unknown_names)))}",
+            f"{field} references unknown type '{expression}'",
         )
 
 

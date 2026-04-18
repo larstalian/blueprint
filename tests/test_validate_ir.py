@@ -54,7 +54,7 @@ def test_validate_ir_rejects_unknown_contract_type_reference(tmp_path: Path) -> 
     report = validate_ir(tmp_path)
 
     assert not report.ok
-    assert any("references unknown type" in item.message for item in report.diagnostics)
+    assert any("unknown type 'MissingRequest'" in item.message for item in report.diagnostics)
 
 
 def test_validate_ir_rejects_disallowed_layer_dependency(tmp_path: Path) -> None:
@@ -75,7 +75,31 @@ def test_validate_ir_rejects_disallowed_layer_dependency(tmp_path: Path) -> None
     report = validate_ir(tmp_path)
 
     assert not report.ok
-    assert any("violates layer policy" in item.message for item in report.diagnostics)
+    assert any("cannot depend on" in item.message for item in report.diagnostics)
+
+
+def test_validate_ir_rejects_missing_dependency_rule_for_used_layer(tmp_path: Path) -> None:
+    write_minimal_repo(tmp_path)
+    write_file(
+        tmp_path / ".arch/policies.yaml",
+        """
+        layers:
+          - service
+          - infra
+        allowed_dependencies:
+          infra: []
+        forbidden_imports:
+          - flask
+        side_effect_defaults:
+          network: false
+          filesystem: false
+        """,
+    )
+
+    report = validate_ir(tmp_path)
+
+    assert not report.ok
+    assert any("missing dependency rule for layer 'service'" in item.message for item in report.diagnostics)
 
 
 def test_validate_ir_rejects_contract_module_outside_compiler_files(tmp_path: Path) -> None:
@@ -100,6 +124,42 @@ def test_validate_ir_rejects_contract_module_outside_compiler_files(tmp_path: Pa
 
     assert not report.ok
     assert any("must be compiler-owned" in item.message for item in report.diagnostics)
+
+
+def test_validate_ir_rejects_data_model_module_overlapping_unit_file(tmp_path: Path) -> None:
+    write_minimal_repo(tmp_path)
+    write_file(
+        tmp_path / ".arch/data_models/payment_result.yaml",
+        """
+        id: payment_result
+        kind: dataclass
+        module: app/audit/logger.py
+        symbol: PaymentResult
+        fields:
+          - name: accepted
+            type: bool
+          - name: reason
+            type: str
+        """,
+    )
+    write_file(
+        tmp_path / ".arch/ownership.yaml",
+        """
+        unit_files:
+          payment_service:
+            - app/payments/service.py
+        compiler_files:
+          - app/payments/contracts.py
+          - app/payments/models.py
+          - app/audit/logger.py
+          - tests/contracts/test_payment_authorizer.py
+        """,
+    )
+
+    report = validate_ir(tmp_path)
+
+    assert not report.ok
+    assert any("cannot overlap unit-owned file" in item.message for item in report.diagnostics)
 
 
 def test_validate_ir_rejects_unknown_flow_call_method(tmp_path: Path) -> None:
