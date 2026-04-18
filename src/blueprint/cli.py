@@ -8,7 +8,9 @@ from pathlib import Path
 
 from blueprint.compiler import CompileError, compile_ir
 from blueprint.ir.validator import validate_ir
+from blueprint.planner import plan_jobs
 from blueprint.revisions import RevisionValidationError, create_revision
+from blueprint.verifier import verify_repo
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -42,6 +44,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit deterministic compiler-owned files from the .arch model.",
     )
     compile_parser.add_argument(
+        "repo",
+        nargs="?",
+        default=".",
+        help="Path to the repository root. Defaults to the current directory.",
+    )
+
+    plan_parser = subparsers.add_parser(
+        "plan-jobs",
+        help="Build a deterministic full job plan from the .arch model.",
+    )
+    plan_parser.add_argument(
+        "repo",
+        nargs="?",
+        default=".",
+        help="Path to the repository root. Defaults to the current directory.",
+    )
+    plan_parser.add_argument(
+        "--unit",
+        action="append",
+        dest="units",
+        default=None,
+        help="Managed unit ID to plan. Repeat to plan more than one unit.",
+    )
+
+    verify_parser = subparsers.add_parser(
+        "verify",
+        help="Verify generated files and managed Python sources against the IR.",
+    )
+    verify_parser.add_argument(
         "repo",
         nargs="?",
         default=".",
@@ -99,6 +130,36 @@ def main(argv: list[str] | None = None) -> int:
         for emitted_file in result.emitted_files:
             print(emitted_file)
         return 0
+
+    if args.command == "plan-jobs":
+        try:
+            plan = plan_jobs(Path(args.repo), target_units=args.units)
+        except RevisionValidationError as exc:
+            for diagnostic in exc.report.diagnostics:
+                print(
+                    f"{diagnostic.path}: [{diagnostic.code}] {diagnostic.message}",
+                    file=sys.stderr,
+                )
+            return 1
+        except ValueError as exc:
+            print(f"[plan.error] {exc}", file=sys.stderr)
+            return 1
+
+        print(plan.serialized_plan, end="")
+        return 0
+
+    if args.command == "verify":
+        report = verify_repo(Path(args.repo))
+        if report.ok:
+            print("Verification passed.")
+            return 0
+
+        for diagnostic in report.diagnostics:
+            print(
+                f"{diagnostic.path}: [{diagnostic.code}] {diagnostic.message}",
+                file=sys.stderr,
+            )
+        return 1
 
     parser.error(f"unknown command: {args.command}")
     return 2

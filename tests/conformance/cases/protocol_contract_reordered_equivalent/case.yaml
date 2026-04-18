@@ -13,10 +13,15 @@ expect:
     ok: true
     revision_id: fba3f7bc2ce6df87fb10a5155dd07bfcf2085d80eaa7a33308bfe8625bd5da21
     same_revision_as: protocol_contract_basic
+  plan:
+    ok: true
+    same_plan_as: protocol_contract_basic
   compile:
     ok: true
     emitted_files:
       - app/payments/contracts.py
       - app/payments/models.py
       - tests/contracts/test_payment_authorizer.py
-
+  verify:
+    ok: true
+    repo_state: compiled

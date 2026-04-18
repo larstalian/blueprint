@@ -1,0 +1,37 @@
+{
+  "jobs": [
+    {
+      "depends_on": [],
+      "job_id": "compile:compiler_owned",
+      "kind": "compile",
+      "owned_files": [
+        "app/payments/contracts.py",
+        "app/payments/models.py",
+        "tests/contracts/test_payment_authorizer.py"
+      ]
+    },
+    {
+      "depends_on": [
+        "compile:compiler_owned"
+      ],
+      "job_id": "unit:payment_service",
+      "kind": "implement_unit",
+      "owned_files": [
+        "app/payments/service.py"
+      ],
+      "provided_contracts": [
+        "payment_authorizer"
+      ],
+      "required_contracts": [],
+      "required_units": [
+        "payment_gateway"
+      ],
+      "tests": [
+        "tests/contracts/test_payment_authorizer.py"
+      ],
+      "unit_id": "payment_service",
+      "unit_kind": "service"
+    }
+  ],
+  "revision_id": "f7c194963eec0047993993e2081049244ece8301fe52ea1286d0a7d2029ee533"
+}
