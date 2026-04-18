@@ -31,6 +31,8 @@ from blueprint.coder.openai import OpenAIResponsesCoder
 
 
 def create_coder_backend(name: str, *, model: str | None = None) -> CoderBackend:
+    # TODO: Split OpenAI-compatible HTTP backends from the official OpenAI SDK path.
+    # The SDK is not a universal provider abstraction.
     if name == "codex":
         return CodexCoder(model=model)
     if name == "claude":
