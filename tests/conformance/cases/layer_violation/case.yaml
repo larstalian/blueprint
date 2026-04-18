@@ -1,0 +1,11 @@
+id: layer_violation
+patterns:
+  - policy.layer_rules
+expect:
+  validate:
+    ok: false
+    diagnostics:
+      - code: ir.policy_layer
+        path: .arch/units/payment_service.yaml
+        message: unit 'payment_service' in layer 'service' cannot depend on 'payment_gateway' in layer 'service'
+

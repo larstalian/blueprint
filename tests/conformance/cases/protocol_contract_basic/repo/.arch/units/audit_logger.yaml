@@ -1,0 +1,8 @@
+id: audit_logger
+kind: adapter
+language: python
+generation_mode: observed
+layer: infra
+files:
+  - app/audit/logger.py
+

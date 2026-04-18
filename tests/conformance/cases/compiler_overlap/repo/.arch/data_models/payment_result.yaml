@@ -1,0 +1,10 @@
+id: payment_result
+kind: dataclass
+module: app/audit/logger.py
+symbol: PaymentResult
+fields:
+  - name: accepted
+    type: bool
+  - name: reason
+    type: str
+

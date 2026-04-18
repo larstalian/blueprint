@@ -1,0 +1,11 @@
+id: compiler_overlap
+patterns:
+  - model.dataclass
+  - ownership.compiler_files
+expect:
+  validate:
+    ok: false
+    diagnostics:
+      - code: ir.compiler_ownership
+        path: .arch/data_models/payment_result.yaml#module
+        message: "data model module 'app/audit/logger.py' cannot overlap unit-owned file(s): audit_logger"

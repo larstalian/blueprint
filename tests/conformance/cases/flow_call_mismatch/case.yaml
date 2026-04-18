@@ -1,0 +1,12 @@
+id: flow_call_mismatch
+patterns:
+  - flow.call
+  - contract.protocol
+expect:
+  validate:
+    ok: false
+    diagnostics:
+      - code: ir.flow_reference
+        path: .arch/flows/checkout_flow.yaml#steps.0.call
+        message: flow call 'payment_service.refund' does not match any provided contract method on unit 'payment_service'
+

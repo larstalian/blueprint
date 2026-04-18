@@ -31,4 +31,4 @@ where = ["src"]
 "blueprint.schemas" = ["v1/*.json"]
 
 [tool.pytest.ini_options]
-norecursedirs = ["tests/fixtures"]
+norecursedirs = ["tests/fixtures", "tests/conformance/cases"]

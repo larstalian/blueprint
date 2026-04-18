@@ -1,0 +1,13 @@
+layers:
+  - service
+  - infra
+allowed_dependencies:
+  infra: []
+  service:
+    - infra
+forbidden_imports:
+  - flask
+side_effect_defaults:
+  network: false
+  filesystem: false
+

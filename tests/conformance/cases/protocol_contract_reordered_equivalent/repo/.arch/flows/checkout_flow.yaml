@@ -1,0 +1,10 @@
+id: checkout_flow
+trigger:
+  contract: payment_authorizer
+  unit: payment_service
+  type: call
+steps:
+  - call: payment_service.authorize
+  - emit: payment_authorized
+  - call: audit_logger.record
+

@@ -1,0 +1,233 @@
+{
+  "collections": {
+    "contracts": [
+      {
+        "id": "payment_authorizer",
+        "identity": {
+          "entity_id": "contract:payment_authorizer",
+          "symbol_id": "python:app/payments/contracts.py:PaymentAuthorizer"
+        },
+        "kind": "protocol",
+        "methods": [
+          {
+            "name": "authorize",
+            "params": [
+              {
+                "name": "request",
+                "type": "PaymentRequest"
+              }
+            ],
+            "returns": "PaymentResult"
+          }
+        ],
+        "module": "app/payments/contracts.py",
+        "symbol": "PaymentAuthorizer"
+      }
+    ],
+    "data_models": [
+      {
+        "fields": [
+          {
+            "name": "amount",
+            "type": "Decimal"
+          },
+          {
+            "name": "currency",
+            "type": "str"
+          }
+        ],
+        "id": "payment_request",
+        "identity": {
+          "entity_id": "data_model:payment_request",
+          "symbol_id": "python:app/payments/models.py:PaymentRequest"
+        },
+        "kind": "dataclass",
+        "module": "app/payments/models.py",
+        "symbol": "PaymentRequest"
+      },
+      {
+        "fields": [
+          {
+            "name": "accepted",
+            "type": "bool"
+          },
+          {
+            "name": "reason",
+            "type": "str"
+          }
+        ],
+        "id": "payment_result",
+        "identity": {
+          "entity_id": "data_model:payment_result",
+          "symbol_id": "python:app/payments/models.py:PaymentResult"
+        },
+        "kind": "dataclass",
+        "module": "app/payments/models.py",
+        "symbol": "PaymentResult"
+      }
+    ],
+    "flows": [
+      {
+        "id": "checkout_flow",
+        "identity": {
+          "entity_id": "flow:checkout_flow"
+        },
+        "steps": [
+          {
+            "call": "payment_service.authorize"
+          },
+          {
+            "emit": "payment_authorized"
+          },
+          {
+            "call": "audit_logger.record"
+          }
+        ],
+        "trigger": {
+          "contract": "payment_authorizer",
+          "type": "call",
+          "unit": "payment_service"
+        }
+      }
+    ],
+    "units": [
+      {
+        "files": [
+          "app/audit/logger.py"
+        ],
+        "generation_mode": "observed",
+        "id": "audit_logger",
+        "identity": {
+          "entity_id": "unit:audit_logger"
+        },
+        "kind": "adapter",
+        "language": "python",
+        "layer": "infra",
+        "patterns": [],
+        "provides": [],
+        "requires": [],
+        "tests": []
+      },
+      {
+        "files": [
+          "app/events/bus.py"
+        ],
+        "generation_mode": "opaque",
+        "id": "event_bus",
+        "identity": {
+          "entity_id": "unit:event_bus"
+        },
+        "kind": "registry",
+        "language": "python",
+        "layer": "infra",
+        "patterns": [],
+        "provides": [],
+        "requires": [],
+        "tests": []
+      },
+      {
+        "files": [
+          "app/payments/gateway.py"
+        ],
+        "generation_mode": "opaque",
+        "id": "payment_gateway",
+        "identity": {
+          "entity_id": "unit:payment_gateway"
+        },
+        "kind": "adapter",
+        "language": "python",
+        "layer": "infra",
+        "patterns": [],
+        "provides": [],
+        "requires": [],
+        "tests": []
+      },
+      {
+        "files": [
+          "app/payments/service.py"
+        ],
+        "generation_mode": "managed",
+        "id": "payment_service",
+        "identity": {
+          "entity_id": "unit:payment_service"
+        },
+        "kind": "service",
+        "language": "python",
+        "layer": "service",
+        "patterns": [
+          "constructor_injection",
+          "protocol_contract"
+        ],
+        "policies": {
+          "concurrency": "sync",
+          "side_effects": {
+            "filesystem": false,
+            "network": true
+          }
+        },
+        "provides": [
+          "payment_authorizer"
+        ],
+        "requires": [
+          "audit_logger",
+          "event_bus",
+          "payment_gateway"
+        ],
+        "tests": [
+          "tests/contracts/test_payment_authorizer.py",
+          "tests/unit/payments/test_service.py"
+        ]
+      }
+    ]
+  },
+  "ownership": {
+    "compiler_files": [
+      "app/payments/contracts.py",
+      "app/payments/models.py",
+      "tests/contracts/test_payment_authorizer.py"
+    ],
+    "unit_files": {
+      "payment_service": [
+        "app/payments/service.py"
+      ]
+    }
+  },
+  "policies": {
+    "allowed_dependencies": {
+      "infra": [],
+      "service": [
+        "infra"
+      ]
+    },
+    "forbidden_imports": [
+      "flask"
+    ],
+    "layers": [
+      "infra",
+      "service"
+    ],
+    "side_effect_defaults": {
+      "filesystem": false,
+      "network": false
+    }
+  },
+  "schema_version": 1,
+  "system": {
+    "compiler": {
+      "generated_root": "app",
+      "tests_root": "tests"
+    },
+    "conventions": {
+      "formatter": "ruff",
+      "test_framework": "pytest",
+      "type_checker": "pyright"
+    },
+    "language": "python",
+    "python": {
+      "package_root": "app",
+      "version": "3.13"
+    },
+    "schema_version": 1,
+    "system_id": "checkout"
+  }
+}

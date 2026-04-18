@@ -1,0 +1,9 @@
+layers:
+  - service
+allowed_dependencies:
+  service: []
+forbidden_imports: []
+side_effect_defaults:
+  network: false
+  filesystem: false
+

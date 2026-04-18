@@ -1,0 +1,16 @@
+id: payment_service
+kind: service
+language: python
+generation_mode: managed
+layer: service
+files:
+  - app/payments/service.py
+provides:
+  - payment_authorizer
+requires:
+  - payment_gateway
+patterns:
+  - constructor_injection
+tests:
+  - tests/contracts/test_payment_authorizer.py
+

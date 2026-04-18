@@ -1,0 +1,47 @@
+id: missing_ownership_file
+patterns:
+  - repo.missing_required_file
+expect:
+  validate:
+    ok: false
+    diagnostics:
+      - code: ir.missing_file
+        path: .arch/ownership.yaml
+        message: missing required file
+      - code: ir.missing_directory
+        path: .arch/contracts
+        message: missing required directory
+      - code: ir.missing_directory
+        path: .arch/data_models
+        message: missing required directory
+      - code: ir.missing_directory
+        path: .arch/flows
+        message: missing required directory
+      - code: ir.ownership_mismatch
+        path: .arch/ownership.yaml
+        message: unit_files must match the managed unit set declared in .arch/units/
+      - code: ir.ownership_mismatch
+        path: .arch/ownership.yaml
+        message: unit_files must match the files of each managed unit exactly
+  create_revision:
+    ok: false
+    diagnostics:
+      - code: ir.missing_file
+        path: .arch/ownership.yaml
+        message: missing required file
+      - code: ir.missing_directory
+        path: .arch/contracts
+        message: missing required directory
+      - code: ir.missing_directory
+        path: .arch/data_models
+        message: missing required directory
+      - code: ir.missing_directory
+        path: .arch/flows
+        message: missing required directory
+      - code: ir.ownership_mismatch
+        path: .arch/ownership.yaml
+        message: unit_files must match the managed unit set declared in .arch/units/
+      - code: ir.ownership_mismatch
+        path: .arch/ownership.yaml
+        message: unit_files must match the files of each managed unit exactly
+
