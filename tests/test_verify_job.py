@@ -6,7 +6,12 @@ import yaml
 
 from blueprint.compiler import compile_ir
 from blueprint.planner import job_manifest_path, write_job_manifests
-from blueprint.verifier.core import VERIFY_JOB_MANIFEST, VERIFY_STALE_REVISION, verify_job
+from blueprint.verifier.core import (
+    VERIFY_CHANGED_FILE_SCOPE,
+    VERIFY_JOB_MANIFEST,
+    VERIFY_STALE_REVISION,
+    verify_job,
+)
 
 
 FIXTURES_ROOT = Path(__file__).parent / "fixtures"
@@ -18,7 +23,11 @@ def test_verify_job_passes_for_written_unit_manifest(tmp_path: Path) -> None:
 
     compile_ir(repo_root)
     write_job_manifests(repo_root)
-    report = verify_job(repo_root, job_manifest_path("unit:payment_service"))
+    report = verify_job(
+        repo_root,
+        job_manifest_path("unit:payment_service"),
+        changed_files=["app/payments/service.py"],
+    )
 
     assert report.ok is True
 
@@ -35,7 +44,11 @@ def test_verify_job_rejects_stale_revision(tmp_path: Path) -> None:
     unit["tests"].append("tests/unit/payments/test_service_v2.py")
     unit_path.write_text(yaml.safe_dump(unit, sort_keys=False), encoding="utf-8")
 
-    report = verify_job(repo_root, job_manifest_path("unit:payment_service"))
+    report = verify_job(
+        repo_root,
+        job_manifest_path("unit:payment_service"),
+        changed_files=["app/payments/service.py"],
+    )
 
     assert report.ok is False
     assert any(item.code == VERIFY_STALE_REVISION for item in report.diagnostics)
@@ -53,7 +66,11 @@ def test_verify_job_rejects_tampered_manifest(tmp_path: Path) -> None:
     manifest["owned_files"].append("app/payments/extra.py")
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    report = verify_job(repo_root, manifest_path)
+    report = verify_job(
+        repo_root,
+        manifest_path,
+        changed_files=["app/payments/service.py"],
+    )
 
     assert report.ok is False
     assert any(item.code == VERIFY_JOB_MANIFEST for item in report.diagnostics)
@@ -87,6 +104,42 @@ def test_verify_job_is_scoped_to_the_selected_job(tmp_path: Path) -> None:
 
     compile_ir(repo_root)
     write_job_manifests(repo_root)
-    report = verify_job(repo_root, job_manifest_path("unit:payment_service"))
+    report = verify_job(
+        repo_root,
+        job_manifest_path("unit:payment_service"),
+        changed_files=["app/payments/service.py"],
+    )
 
     assert report.ok is True
+
+
+def test_verify_job_rejects_changed_file_outside_unit_ownership(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    shutil.copytree(FIXTURES_ROOT / "minimal_valid_repo", repo_root)
+
+    compile_ir(repo_root)
+    write_job_manifests(repo_root)
+    report = verify_job(
+        repo_root,
+        job_manifest_path("unit:payment_service"),
+        changed_files=["app/payments/gateway.py"],
+    )
+
+    assert report.ok is False
+    assert any(item.code == VERIFY_CHANGED_FILE_SCOPE for item in report.diagnostics)
+
+
+def test_verify_job_rejects_changed_file_outside_compile_ownership(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    shutil.copytree(FIXTURES_ROOT / "minimal_valid_repo", repo_root)
+
+    compile_ir(repo_root)
+    write_job_manifests(repo_root)
+    report = verify_job(
+        repo_root,
+        job_manifest_path("compile:compiler_owned"),
+        changed_files=["app/payments/service.py"],
+    )
+
+    assert report.ok is False
+    assert any(item.code == VERIFY_CHANGED_FILE_SCOPE for item in report.diagnostics)

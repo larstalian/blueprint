@@ -21,6 +21,7 @@ VERIFY_MISSING_UNIT_FILE = "verify.missing_unit_file"
 VERIFY_PYTHON_SYNTAX = "verify.python_syntax"
 VERIFY_STALE_REVISION = "verify.stale_revision"
 VERIFY_JOB_MANIFEST = "verify.job_manifest"
+VERIFY_CHANGED_FILE_SCOPE = "verify.changed_file_scope"
 
 
 @dataclass
@@ -83,7 +84,12 @@ def verify_repo(
     return report
 
 
-def verify_job(repo_root: Path, manifest_path: Path) -> VerificationReport:
+def verify_job(
+    repo_root: Path,
+    manifest_path: Path,
+    *,
+    changed_files: list[str] | None = None,
+) -> VerificationReport:
     repo_root = Path(repo_root).resolve()
     manifest_path = Path(manifest_path)
     if not manifest_path.is_absolute():
@@ -165,6 +171,14 @@ def verify_job(repo_root: Path, manifest_path: Path) -> VerificationReport:
             _relative_to_repo(repo_root, manifest_path),
             "job manifest does not match the current deterministic plan",
         )
+        return report
+
+    _verify_changed_files(
+        report=report,
+        changed_files=changed_files,
+        owned_files=_as_string_list(expected_job.get("owned_files")),
+    )
+    if not report.ok:
         return report
 
     if expected_job["kind"] == "compile" or "compile:compiler_owned" in _as_string_list(
@@ -251,6 +265,24 @@ def _verify_owned_files(
         if output_path.suffix != ".py":
             continue
         _verify_python_syntax(report, output_path, relative_path)
+
+
+def _verify_changed_files(
+    report: VerificationReport,
+    changed_files: list[str] | None,
+    owned_files: list[str],
+) -> None:
+    if changed_files is None:
+        return
+
+    allowed_files = set(owned_files)
+    for relative_path in sorted(set(changed_files)):
+        if relative_path not in allowed_files:
+            report.add(
+                VERIFY_CHANGED_FILE_SCOPE,
+                relative_path,
+                "changed file is outside the job ownership boundary",
+            )
 
 
 def _verify_python_syntax(

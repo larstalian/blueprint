@@ -110,6 +110,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=".",
         help="Path to the repository root. Defaults to the current directory.",
     )
+    verify_job_parser.add_argument(
+        "--changed-file",
+        action="append",
+        dest="changed_files",
+        default=None,
+        help="Relative file path claimed by the job execution. Repeat to provide more than one.",
+    )
 
     return parser
 
@@ -213,7 +220,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "verify-job":
-        report = verify_job(Path(args.repo), Path(args.manifest))
+        report = verify_job(
+            Path(args.repo),
+            Path(args.manifest),
+            changed_files=args.changed_files,
+        )
         if report.ok:
             print("Job verification passed.")
             return 0
