@@ -6,6 +6,7 @@ from blueprint.compiler import compile_ir
 from blueprint.planner import (
     job_manifest_path,
     prepare_job_worktree,
+    remove_job_worktree,
     write_execution_result,
     write_job_manifests,
 )
@@ -67,6 +68,74 @@ def test_prepare_job_worktree_supports_git_diff_based_execution_result(tmp_path:
     assert artifact.changed_files == ("app/payments/service.py",)
     report = verify_execution_result(worktree_root, artifact.path)
     assert report.ok is True
+
+
+def test_remove_job_worktree_removes_prepared_worktree(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    shutil.copytree(FIXTURES_ROOT / "minimal_valid_repo", repo_root)
+
+    compile_ir(repo_root)
+    _commit_current_repo_state(repo_root)
+    write_job_manifests(repo_root)
+    worktree = prepare_job_worktree(
+        repo_root,
+        job_manifest_path("unit:payment_service"),
+    )
+
+    worktree_root = Path(worktree.path)
+    remove_job_worktree(repo_root, worktree_root)
+
+    assert worktree_root.exists() is False
+    listed = _run_git_output(repo_root, "worktree", "list", "--porcelain")
+    assert str(worktree_root) not in listed
+
+
+def test_remove_job_worktree_rejects_path_outside_managed_root(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    shutil.copytree(FIXTURES_ROOT / "minimal_valid_repo", repo_root)
+
+    compile_ir(repo_root)
+    _commit_current_repo_state(repo_root)
+
+    outside_path = repo_root / "not-a-worktree"
+    outside_path.mkdir()
+
+    try:
+        remove_job_worktree(repo_root, outside_path)
+    except ValueError as exc:
+        assert "outside managed root" in str(exc)
+    else:
+        raise AssertionError("expected remove_job_worktree to reject unmanaged path")
+
+
+def test_remove_job_worktree_requires_force_for_real_code_changes(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    shutil.copytree(FIXTURES_ROOT / "minimal_valid_repo", repo_root)
+
+    compile_ir(repo_root)
+    _commit_current_repo_state(repo_root)
+    write_job_manifests(repo_root)
+    worktree = prepare_job_worktree(
+        repo_root,
+        job_manifest_path("unit:payment_service"),
+    )
+
+    worktree_root = Path(worktree.path)
+    service_path = worktree_root / "app/payments/service.py"
+    service_path.write_text(
+        service_path.read_text(encoding="utf-8") + "\n\nDIRTY = True\n",
+        encoding="utf-8",
+    )
+
+    try:
+        remove_job_worktree(repo_root, worktree_root)
+    except ValueError as exc:
+        assert "contains modified or untracked files" in str(exc)
+    else:
+        raise AssertionError("expected remove_job_worktree to reject dirty worktree")
+
+    remove_job_worktree(repo_root, worktree_root, force=True)
+    assert worktree_root.exists() is False
 
 
 def _commit_current_repo_state(repo_root: Path) -> None:

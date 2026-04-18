@@ -11,6 +11,7 @@ from blueprint.ir.validator import validate_ir
 from blueprint.planner import (
     plan_jobs,
     prepare_job_worktree,
+    remove_job_worktree,
     write_execution_result,
     write_job_manifests,
 )
@@ -182,6 +183,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Git ref used as the worktree base.",
     )
 
+    remove_worktree_parser = subparsers.add_parser(
+        "remove-job-worktree",
+        help="Remove one prepared job worktree.",
+    )
+    remove_worktree_parser.add_argument(
+        "worktree",
+        help="Path to a prepared job worktree.",
+    )
+    remove_worktree_parser.add_argument(
+        "--repo",
+        default=".",
+        help="Path to the repository root. Defaults to the current directory.",
+    )
+    remove_worktree_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force removal even if the worktree has local changes.",
+    )
+
     return parser
 
 
@@ -347,6 +367,23 @@ def main(argv: list[str] | None = None) -> int:
 
         print(worktree.path)
         print(worktree.manifest_path)
+        return 0
+
+    if args.command == "remove-job-worktree":
+        try:
+            remove_job_worktree(
+                Path(args.repo),
+                Path(args.worktree),
+                force=args.force,
+            )
+        except OSError as exc:
+            print(f"[worktree.error] {exc}", file=sys.stderr)
+            return 1
+        except ValueError as exc:
+            print(f"[worktree.error] {exc}", file=sys.stderr)
+            return 1
+
+        print("Worktree removed.")
         return 0
 
     parser.error(f"unknown command: {args.command}")

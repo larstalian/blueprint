@@ -255,6 +255,29 @@ def prepare_job_worktree(
     )
 
 
+def remove_job_worktree(
+    repo_root: Path,
+    worktree_path: Path,
+    *,
+    force: bool = False,
+) -> None:
+    repo_root = Path(repo_root).resolve()
+    worktree_path = Path(worktree_path).resolve()
+    worktrees_root = _worktrees_root(repo_root)
+    try:
+        worktree_path.relative_to(worktrees_root)
+    except ValueError as exc:
+        raise ValueError(f"worktree is outside managed root: {worktree_path}") from exc
+
+    _cleanup_worktree_manifests(worktree_path)
+    args = ["worktree", "remove"]
+    if force:
+        args.append("--force")
+    args.append(str(worktree_path))
+    _run_git(repo_root, *args)
+    _remove_empty_parents(worktree_path.parent, stop_at=worktrees_root)
+
+
 def _as_string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -310,7 +333,27 @@ def _worktree_path(repo_root: Path, job_id: str) -> Path:
     kind, separator, name = job_id.partition(":")
     if not separator or not kind or not name:
         raise ValueError(f"invalid job_id: {job_id}")
-    return repo_root.parent / f".{repo_root.name}-worktrees" / kind / name
+    return _worktrees_root(repo_root) / kind / name
+
+
+def _worktrees_root(repo_root: Path) -> Path:
+    return repo_root.parent / f".{repo_root.name}-worktrees"
+
+
+def _remove_empty_parents(path: Path, *, stop_at: Path) -> None:
+    current = path
+    while current != stop_at and current.exists():
+        try:
+            current.rmdir()
+        except OSError:
+            return
+        current = current.parent
+
+
+def _cleanup_worktree_manifests(worktree_path: Path) -> None:
+    manifests_root = worktree_path / ".arch" / "manifests"
+    if manifests_root.exists():
+        shutil.rmtree(manifests_root)
 
 
 def _resolve_planned_units(
