@@ -33,6 +33,13 @@ class ExecutionResultArtifact:
 
 
 @dataclass(frozen=True)
+class ExecutionDiff:
+    base_ref: str
+    changed_files: tuple[str, ...]
+    diff: str
+
+
+@dataclass(frozen=True)
 class JobWorktree:
     path: str
     manifest_path: str
@@ -217,6 +224,45 @@ def write_execution_result(
     return ExecutionResultArtifact(
         path=job_result_path(job_id),
         changed_files=tuple(artifact["changed_files"]),
+    )
+
+
+def build_execution_diff(
+    repo_root: Path,
+    result_path: Path,
+    *,
+    base_ref: str = "HEAD",
+) -> ExecutionDiff:
+    repo_root = Path(repo_root).resolve()
+    result_path = Path(result_path)
+    if not result_path.is_absolute():
+        result_path = (repo_root / result_path).resolve()
+
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    changed_files = result.get("changed_files")
+    if not isinstance(changed_files, list) or any(
+        not isinstance(item, str) or not item for item in changed_files
+    ):
+        raise ValueError("execution result is missing a valid changed_files list")
+
+    normalized_files = tuple(sorted(set(changed_files)))
+    if normalized_files:
+        diff = _run_git(
+            repo_root,
+            "diff",
+            "--relative",
+            "--unified=3",
+            base_ref,
+            "--",
+            *normalized_files,
+        )
+    else:
+        diff = ""
+
+    return ExecutionDiff(
+        base_ref=base_ref,
+        changed_files=normalized_files,
+        diff=diff,
     )
 
 

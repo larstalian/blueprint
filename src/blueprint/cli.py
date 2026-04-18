@@ -9,6 +9,7 @@ from pathlib import Path
 from blueprint.compiler import CompileError, compile_ir
 from blueprint.ir.validator import validate_ir
 from blueprint.planner import (
+    build_execution_diff,
     plan_jobs,
     prepare_job_worktree,
     remove_job_worktree,
@@ -202,6 +203,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Force removal even if the worktree has local changes.",
     )
 
+    diff_parser = subparsers.add_parser(
+        "show-execution-diff",
+        help="Show the exact git diff for one execution result artifact.",
+    )
+    diff_parser.add_argument(
+        "result",
+        help="Path to an execution result JSON file.",
+    )
+    diff_parser.add_argument(
+        "--repo",
+        default=".",
+        help="Path to the repository root. Defaults to the current directory.",
+    )
+    diff_parser.add_argument(
+        "--base-ref",
+        default="HEAD",
+        help="Git base ref used to compute the diff.",
+    )
+
     return parser
 
 
@@ -384,6 +404,23 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         print("Worktree removed.")
+        return 0
+
+    if args.command == "show-execution-diff":
+        try:
+            execution_diff = build_execution_diff(
+                Path(args.repo),
+                Path(args.result),
+                base_ref=args.base_ref,
+            )
+        except OSError as exc:
+            print(f"[review.error] {exc}", file=sys.stderr)
+            return 1
+        except ValueError as exc:
+            print(f"[review.error] {exc}", file=sys.stderr)
+            return 1
+
+        print(execution_diff.diff, end="")
         return 0
 
     parser.error(f"unknown command: {args.command}")
