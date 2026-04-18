@@ -150,7 +150,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         dest="changed_files",
         default=None,
-        help="Relative file path claimed by the job execution. Repeat to provide more than one.",
+        help="Relative file path claimed by the job execution. If omitted, changed files are derived from git diff.",
+    )
+    write_result_parser.add_argument(
+        "--base-ref",
+        default="HEAD",
+        help="Git base ref used to derive changed files when --changed-file is omitted.",
     )
 
     return parser
@@ -289,7 +294,8 @@ def main(argv: list[str] | None = None) -> int:
             artifact = write_execution_result(
                 Path(args.repo),
                 Path(args.manifest),
-                changed_files=args.changed_files or [],
+                changed_files=args.changed_files,
+                base_ref=args.base_ref,
             )
         except OSError as exc:
             print(f"[execution.error] {exc}", file=sys.stderr)

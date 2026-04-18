@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import json
 import shutil
 from pathlib import Path
+import subprocess
 from typing import Any, Dict, Mapping
 
 from blueprint.revisions import Revision, create_revision
@@ -183,7 +184,8 @@ def write_execution_result(
     repo_root: Path,
     manifest_path: Path,
     *,
-    changed_files: list[str],
+    changed_files: list[str] | None = None,
+    base_ref: str = "HEAD",
 ) -> ExecutionResultArtifact:
     repo_root = Path(repo_root).resolve()
     manifest_path = Path(manifest_path)
@@ -198,6 +200,8 @@ def write_execution_result(
     result_path = repo_root / job_result_path(job_id)
     result_path.parent.mkdir(parents=True, exist_ok=True)
     relative_manifest_path = manifest_path.resolve().relative_to(repo_root).as_posix()
+    if changed_files is None:
+        changed_files = _changed_files_from_git(repo_root, base_ref=base_ref)
     artifact = build_execution_result(
         relative_manifest_path,
         changed_files=changed_files,
@@ -213,6 +217,40 @@ def _as_string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str) and item]
+
+
+def _changed_files_from_git(repo_root: Path, *, base_ref: str) -> list[str]:
+    diff_files = _run_git_lines(
+        repo_root,
+        "diff",
+        "--name-only",
+        "--relative",
+        base_ref,
+        "--",
+    )
+    untracked_files = _run_git_lines(
+        repo_root,
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+    )
+    return sorted(set(diff_files + untracked_files))
+
+
+def _run_git_lines(repo_root: Path, *args: str) -> list[str]:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        message = exc.stderr.strip() or exc.stdout.strip() or "git command failed"
+        raise ValueError(message) from exc
+
+    return [line for line in result.stdout.splitlines() if line]
 
 
 def _resolve_planned_units(
