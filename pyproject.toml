@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blueprint-backend"
+version = "0.1.0"
+description = "Architecture-first backend compiler and reconciler"
+readme = "docs/backend-spec.md"
+requires-python = ">=3.9"
+dependencies = [
+  "jsonschema>=4,<5",
+  "PyYAML>=6,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+]
+
+[project.scripts]
+blueprint = "blueprint.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"blueprint.schemas" = ["v1/*.json"]
+

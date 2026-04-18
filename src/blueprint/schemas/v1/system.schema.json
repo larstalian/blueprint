@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "system_id",
+    "language",
+    "python",
+    "compiler",
+    "conventions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "system_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "const": "python"
+    },
+    "python": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "package_root"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "package_root": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "compiler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generated_root",
+        "tests_root"
+      ],
+      "properties": {
+        "generated_root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tests_root": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "conventions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "test_framework",
+        "type_checker",
+        "formatter"
+      ],
+      "properties": {
+        "test_framework": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type_checker": {
+          "type": "string",
+          "minLength": 1
+        },
+        "formatter": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
+

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "revision_id",
+    "compiler_version",
+    "repo_commit",
+    "generated_at"
+  ],
+  "properties": {
+    "revision_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "compiler_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repo_commit": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
+

@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "kind",
+    "language",
+    "generation_mode",
+    "files"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "package",
+        "service",
+        "adapter",
+        "port",
+        "model",
+        "event_handler",
+        "task",
+        "registry",
+        "hook"
+      ]
+    },
+    "language": {
+      "const": "python"
+    },
+    "generation_mode": {
+      "type": "string",
+      "enum": [
+        "managed",
+        "observed",
+        "opaque"
+      ]
+    },
+    "layer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "provides": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "requires": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "patterns": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "tests": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "side_effects": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "network": {
+              "type": "boolean"
+            },
+            "filesystem": {
+              "type": "boolean"
+            }
+          }
+        },
+        "concurrency": {
+          "type": "string",
+          "enum": [
+            "sync",
+            "async",
+            "mixed"
+          ]
+        }
+      }
+    }
+  }
+}
