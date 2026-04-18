@@ -12,6 +12,8 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 from jsonschema import Draft202012Validator
 import yaml
 
+from blueprint.patterns import KNOWN_UNIT_PATTERNS
+
 
 REQUIRED_COLLECTIONS = (
     ("units", "unit"),
@@ -48,6 +50,7 @@ IR_OWNERSHIP_CONFLICT = "ir.ownership_conflict"
 IR_OWNERSHIP_MISMATCH = "ir.ownership_mismatch"
 IR_COMPILER_OWNERSHIP = "ir.compiler_ownership"
 IR_UNKNOWN_TYPE = "ir.unknown_type"
+IR_UNKNOWN_PATTERN = "ir.unknown_pattern"
 IR_POLICY_LAYER = "ir.policy_layer"
 IR_FLOW_REFERENCE = "ir.flow_reference"
 IR_COMPILER_LOCK_INVALID = "ir.compiler_lock_invalid"
@@ -323,6 +326,14 @@ def _validate_cross_file_rules(
                     IR_UNKNOWN_UNIT,
                     unit_path,
                     f"unknown required unit '{dependency_id}'",
+                )
+
+        for pattern_name in _as_string_list(unit.get("patterns")):
+            if pattern_name not in KNOWN_UNIT_PATTERNS:
+                report.add(
+                    IR_UNKNOWN_PATTERN,
+                    _path_with_fragment(unit_path, "patterns"),
+                    f"unknown unit pattern '{pattern_name}'",
                 )
 
     ownership_unit_files = _as_mapping(ownership_doc.get("unit_files"))
