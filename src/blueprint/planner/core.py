@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import shutil
 from pathlib import Path
 from typing import Any, Dict, Mapping
 
@@ -17,6 +18,13 @@ class Plan:
     serialized_plan: str
 
 
+@dataclass(frozen=True)
+class JobManifests:
+    revision_id: str
+    plan_path: str
+    manifest_paths: tuple[str, ...]
+
+
 def plan_jobs(repo_root: Path, target_units: list[str] | None = None) -> Plan:
     repo_root = Path(repo_root).resolve()
     revision = create_revision(repo_root)
@@ -26,6 +34,35 @@ def plan_jobs(repo_root: Path, target_units: list[str] | None = None) -> Plan:
         revision_id=revision.revision_id,
         snapshot=snapshot,
         serialized_plan=serialized_plan,
+    )
+
+
+def write_job_manifests(repo_root: Path, target_units: list[str] | None = None) -> JobManifests:
+    repo_root = Path(repo_root).resolve()
+    plan = plan_jobs(repo_root, target_units=target_units)
+    manifests_root = repo_root / ".arch" / "manifests"
+    jobs_root = manifests_root / "jobs"
+    if jobs_root.exists():
+        shutil.rmtree(jobs_root)
+    jobs_root.mkdir(parents=True, exist_ok=True)
+
+    plan_path = manifests_root / "plan.json"
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text(plan.serialized_plan, encoding="utf-8")
+
+    manifest_paths: list[str] = []
+    for job in plan.snapshot["jobs"]:
+        relative_path = job_manifest_path(job["job_id"])
+        manifest_path = repo_root / relative_path
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest = build_job_manifest(plan.revision_id, job)
+        manifest_path.write_text(serialize_job_manifest(manifest), encoding="utf-8")
+        manifest_paths.append(relative_path)
+
+    return JobManifests(
+        revision_id=plan.revision_id,
+        plan_path=".arch/manifests/plan.json",
+        manifest_paths=tuple(sorted(manifest_paths)),
     )
 
 
@@ -99,6 +136,23 @@ def build_plan_snapshot(
 
 def serialize_plan(plan: Mapping[str, Any]) -> str:
     return json.dumps(plan, indent=2, sort_keys=True) + "\n"
+
+
+def build_job_manifest(revision_id: str, job: Mapping[str, Any]) -> Dict[str, Any]:
+    manifest = {"manifest_version": 1, "revision_id": revision_id}
+    manifest.update(job)
+    return manifest
+
+
+def serialize_job_manifest(manifest: Mapping[str, Any]) -> str:
+    return json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+
+
+def job_manifest_path(job_id: str) -> str:
+    kind, separator, name = job_id.partition(":")
+    if not separator or not kind or not name:
+        raise ValueError(f"invalid job_id: {job_id}")
+    return f".arch/manifests/jobs/{kind}/{name}.json"
 
 
 def _as_string_list(value: Any) -> list[str]:

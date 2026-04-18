@@ -8,9 +8,9 @@ from pathlib import Path
 
 from blueprint.compiler import CompileError, compile_ir
 from blueprint.ir.validator import validate_ir
-from blueprint.planner import plan_jobs
+from blueprint.planner import plan_jobs, write_job_manifests
 from blueprint.revisions import RevisionValidationError, create_revision
-from blueprint.verifier import verify_repo
+from blueprint.verifier import verify_job, verify_repo
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -75,6 +75,38 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument(
         "repo",
         nargs="?",
+        default=".",
+        help="Path to the repository root. Defaults to the current directory.",
+    )
+
+    manifests_parser = subparsers.add_parser(
+        "write-job-manifests",
+        help="Write deterministic job manifest files under .arch/manifests/jobs.",
+    )
+    manifests_parser.add_argument(
+        "repo",
+        nargs="?",
+        default=".",
+        help="Path to the repository root. Defaults to the current directory.",
+    )
+    manifests_parser.add_argument(
+        "--unit",
+        action="append",
+        dest="units",
+        default=None,
+        help="Managed unit ID to plan. Repeat to plan more than one unit.",
+    )
+
+    verify_job_parser = subparsers.add_parser(
+        "verify-job",
+        help="Verify one planned job manifest against the current repo state.",
+    )
+    verify_job_parser.add_argument(
+        "manifest",
+        help="Path to a planned job manifest file.",
+    )
+    verify_job_parser.add_argument(
+        "--repo",
         default=".",
         help="Path to the repository root. Defaults to the current directory.",
     )
@@ -152,6 +184,38 @@ def main(argv: list[str] | None = None) -> int:
         report = verify_repo(Path(args.repo))
         if report.ok:
             print("Verification passed.")
+            return 0
+
+        for diagnostic in report.diagnostics:
+            print(
+                f"{diagnostic.path}: [{diagnostic.code}] {diagnostic.message}",
+                file=sys.stderr,
+            )
+        return 1
+
+    if args.command == "write-job-manifests":
+        try:
+            manifests = write_job_manifests(Path(args.repo), target_units=args.units)
+        except RevisionValidationError as exc:
+            for diagnostic in exc.report.diagnostics:
+                print(
+                    f"{diagnostic.path}: [{diagnostic.code}] {diagnostic.message}",
+                    file=sys.stderr,
+                )
+            return 1
+        except ValueError as exc:
+            print(f"[plan.error] {exc}", file=sys.stderr)
+            return 1
+
+        print(manifests.plan_path)
+        for manifest_path in manifests.manifest_paths:
+            print(manifest_path)
+        return 0
+
+    if args.command == "verify-job":
+        report = verify_job(Path(args.repo), Path(args.manifest))
+        if report.ok:
+            print("Job verification passed.")
             return 0
 
         for diagnostic in report.diagnostics:
