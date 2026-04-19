@@ -232,6 +232,28 @@ def test_validate_ir_rejects_unknown_registry_event(tmp_path: Path) -> None:
     assert any("unknown registry event 'payment_refunded'" in item.message for item in report.diagnostics)
 
 
+def test_validate_ir_keeps_emit_anchored_to_trigger_unit(tmp_path: Path) -> None:
+    write_minimal_repo(tmp_path)
+    write_file(
+        tmp_path / ".arch/flows/checkout_flow.yaml",
+        """
+        id: checkout_flow
+        trigger:
+          type: call
+          unit: payment_service
+          contract: payment_authorizer
+        steps:
+          - call: payment_service.authorize
+          - call: audit_logger.record
+          - emit: payment_authorized
+        """,
+    )
+
+    report = validate_ir(tmp_path)
+
+    assert report.ok, report.diagnostics
+
+
 def test_validate_ir_rejects_emit_without_registry_dependency(tmp_path: Path) -> None:
     write_minimal_repo(tmp_path)
     write_file(
@@ -267,6 +289,33 @@ def test_validate_ir_rejects_emit_without_registry_dependency(tmp_path: Path) ->
 
     assert not report.ok
     assert any("cannot emit registry event 'payment_authorized'" in item.message for item in report.diagnostics)
+
+
+def test_validate_ir_rejects_duplicate_registry_event_name(tmp_path: Path) -> None:
+    write_minimal_repo(tmp_path)
+    write_file(
+        tmp_path / ".arch/units/z_audit_events.yaml",
+        """
+        id: audit_events
+        kind: registry
+        language: python
+        generation_mode: opaque
+        layer: infra
+        files:
+          - app/events/audit_bus.py
+        events:
+          - payment_authorized
+        """,
+    )
+
+    report = validate_ir(tmp_path)
+
+    assert not report.ok
+    assert any(
+        "registry event 'payment_authorized' is already declared by registry unit 'event_bus'"
+        in item.message
+        for item in report.diagnostics
+    )
 
 
 def test_validate_ir_rejects_non_registry_event_declaration(tmp_path: Path) -> None:

@@ -1,0 +1,16 @@
+id: duplicate_registry_event
+patterns:
+  - unit.registry
+expect:
+  validate:
+    ok: false
+    diagnostics:
+      - code: ir.registry_event
+        path: .arch/units/z_audit_events.yaml#events
+        message: registry event 'payment_authorized' is already declared by registry unit 'event_bus'
+  create_revision:
+    ok: false
+    diagnostics:
+      - code: ir.registry_event
+        path: .arch/units/z_audit_events.yaml#events
+        message: registry event 'payment_authorized' is already declared by registry unit 'event_bus'

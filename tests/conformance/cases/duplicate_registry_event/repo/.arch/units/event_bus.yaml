@@ -1,0 +1,9 @@
+id: event_bus
+kind: registry
+language: python
+generation_mode: opaque
+layer: infra
+files:
+  - app/events/bus.py
+events:
+  - payment_authorized

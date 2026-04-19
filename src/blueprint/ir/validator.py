@@ -298,7 +298,8 @@ def _validate_cross_file_rules(
         for unit_id, unit in units_by_id.items()
         if unit.get("kind") == "registry"
     }
-    registry_event_owners: Dict[str, List[str]] = {}
+    registry_event_owners: Dict[str, str] = {}
+    duplicate_registry_events: set[str] = set()
 
     managed_unit_files: Dict[str, str] = {}
     for unit in units:
@@ -352,7 +353,19 @@ def _validate_cross_file_rules(
             )
         if unit_id and unit.get("kind") == "registry":
             for event_name in event_names:
-                registry_event_owners.setdefault(event_name, []).append(unit_id)
+                owner = registry_event_owners.get(event_name)
+                if owner is not None:
+                    duplicate_registry_events.add(event_name)
+                    report.add(
+                        IR_REGISTRY_EVENT,
+                        _path_with_fragment(unit_path, "events"),
+                        (
+                            f"registry event '{event_name}' is already declared by "
+                            f"registry unit '{owner}'"
+                        ),
+                    )
+                    continue
+                registry_event_owners[event_name] = unit_id
 
     ownership_unit_files = _as_mapping(ownership_doc.get("unit_files"))
     flattened_ownership: Dict[str, str] = {}
@@ -575,7 +588,6 @@ def _validate_cross_file_rules(
         flow_path = _document_path(flow)
         trigger = _as_mapping(flow.get("trigger"))
         trigger_unit = _as_string(trigger.get("unit"))
-        current_unit = trigger_unit
         if trigger_unit and trigger_unit not in unit_ids:
             report.add(
                 IR_FLOW_REFERENCE,
@@ -642,34 +654,35 @@ def _validate_cross_file_rules(
                             f"method on unit '{unit_prefix}'"
                         ),
                     )
-                current_unit = unit_prefix
                 continue
 
             event_name = _as_string(step.get("emit"))
             if event_name:
-                owner_units = sorted(registry_event_owners.get(event_name, []))
-                if not owner_units:
+                if event_name in duplicate_registry_events:
+                    continue
+                owner_unit = registry_event_owners.get(event_name)
+                if owner_unit is None:
                     report.add(
                         IR_REGISTRY_EVENT,
                         _path_with_fragment(flow_path, "steps", step_index, "emit"),
                         f"unknown registry event '{event_name}'",
                     )
                     continue
-                if current_unit and current_unit in units_by_id:
+                if trigger_unit and trigger_unit in units_by_id:
                     reachable_registry_units = {
                         unit_id
-                        for unit_id in _as_string_list(units_by_id[current_unit].get("requires"))
+                        for unit_id in _as_string_list(units_by_id[trigger_unit].get("requires"))
                         if unit_id in registry_unit_ids
                     }
-                    if current_unit in registry_unit_ids:
-                        reachable_registry_units.add(current_unit)
-                    if not reachable_registry_units.intersection(owner_units):
+                    if trigger_unit in registry_unit_ids:
+                        reachable_registry_units.add(trigger_unit)
+                    if owner_unit not in reachable_registry_units:
                         report.add(
                             IR_REGISTRY_EVENT,
                             _path_with_fragment(flow_path, "steps", step_index, "emit"),
                             (
-                                f"unit '{current_unit}' cannot emit registry event '{event_name}' "
-                                f"without depending on one of: {', '.join(owner_units)}"
+                                f"unit '{trigger_unit}' cannot emit registry event '{event_name}' "
+                                f"without depending on registry unit '{owner_unit}'"
                             ),
                         )
 

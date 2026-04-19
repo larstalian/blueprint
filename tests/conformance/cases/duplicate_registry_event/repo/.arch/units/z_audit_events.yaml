@@ -1,0 +1,9 @@
+id: audit_events
+kind: registry
+language: python
+generation_mode: opaque
+layer: infra
+files:
+  - app/events/audit_bus.py
+events:
+  - payment_authorized
