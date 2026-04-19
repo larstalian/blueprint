@@ -7,8 +7,9 @@ files:
   - app/payments/service.py
 provides:
   - payment_authorizer
+consumes:
+  - payment_gateway_contract
 requires:
-  - payment_gateway
   - event_bus
   - audit_logger
 patterns:
@@ -22,4 +23,3 @@ policies:
   side_effects:
     filesystem: false
     network: true
-

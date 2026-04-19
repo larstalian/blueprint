@@ -6,6 +6,5 @@ expect:
     ok: false
     diagnostics:
       - code: ir.policy_layer
-        path: .arch/units/payment_service.yaml
-        message: unit 'payment_service' in layer 'service' cannot depend on 'payment_gateway' in layer 'service'
-
+        path: .arch/units/payment_service.yaml#consumes.0
+        message: unit 'payment_service' in layer 'service' cannot consume contract 'payment_gateway_contract' from unit 'payment_gateway' in layer 'service'

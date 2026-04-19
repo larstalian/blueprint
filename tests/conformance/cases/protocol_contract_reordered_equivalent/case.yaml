@@ -1,17 +1,17 @@
 id: protocol_contract_reordered_equivalent
 patterns:
-  - unit.service
-  - unit.adapter
-  - contract.protocol
-  - model.dataclass
-  - flow.call
-  - policy.layer_rules
+- unit.service
+- unit.adapter
+- contract.protocol
+- model.dataclass
+- flow.call
+- policy.layer_rules
 expect:
   validate:
     ok: true
   create_revision:
     ok: true
-    revision_id: fba3f7bc2ce6df87fb10a5155dd07bfcf2085d80eaa7a33308bfe8625bd5da21
+    revision_id: 36d738e02eea8236df414d108fd8629da8e240f143085012cc8b170c04a42ca9
     same_revision_as: protocol_contract_basic
   plan:
     ok: true
@@ -19,9 +19,10 @@ expect:
   compile:
     ok: true
     emitted_files:
-      - app/payments/contracts.py
-      - app/payments/models.py
-      - tests/contracts/test_payment_authorizer.py
+    - app/payments/contracts.py
+    - app/payments/models.py
+    - tests/contracts/test_payment_authorizer.py
+    - tests/contracts/test_payment_gateway_contract.py
   verify:
     ok: true
     repo_state: compiled

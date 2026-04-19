@@ -7,7 +7,8 @@
       "owned_files": [
         "app/payments/contracts.py",
         "app/payments/models.py",
-        "tests/contracts/test_payment_authorizer.py"
+        "tests/contracts/test_payment_authorizer.py",
+        "tests/contracts/test_payment_gateway_contract.py"
       ]
     },
     {
@@ -22,7 +23,9 @@
       "provided_contracts": [
         "payment_authorizer"
       ],
-      "required_contracts": [],
+      "required_contracts": [
+        "payment_gateway_contract"
+      ],
       "required_units": [
         "payment_gateway"
       ],
@@ -33,5 +36,5 @@
       "unit_kind": "service"
     }
   ],
-  "revision_id": "f7c194963eec0047993993e2081049244ece8301fe52ea1286d0a7d2029ee533"
+  "revision_id": "9310d8bb0054b8ffde5f3b0d886d2c00b8fe783536c3edca745a2e8196157454"
 }

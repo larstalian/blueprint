@@ -8,3 +8,7 @@ from app.payments.models import PaymentRequest, PaymentResult
 
 class PaymentAuthorizer(Protocol):
     def authorize(self, request: PaymentRequest) -> PaymentResult: ...
+
+
+class PaymentGateway(Protocol):
+    def authorize(self, request: PaymentRequest) -> PaymentResult: ...
