@@ -29,8 +29,8 @@ PATTERN_SPECS = (
     PatternSpec(
         id="unit.registry",
         scope="case_tag",
-        status="metadata",
-        summary="Known unit boundary only. No registry-specific compiler or verifier behavior.",
+        status="real",
+        summary="Registry units declare named events that flows may emit.",
     ),
     PatternSpec(
         id="unit.hook",
@@ -83,8 +83,8 @@ PATTERN_SPECS = (
     PatternSpec(
         id="flow.emit",
         scope="case_tag",
-        status="metadata",
-        summary="Flow syntax only. No event emission semantics are enforced yet.",
+        status="real",
+        summary="Validated against declared registry events and registry dependencies.",
     ),
     PatternSpec(
         id="flow.subscribe",

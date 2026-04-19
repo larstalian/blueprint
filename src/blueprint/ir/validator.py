@@ -51,6 +51,7 @@ IR_OWNERSHIP_MISMATCH = "ir.ownership_mismatch"
 IR_COMPILER_OWNERSHIP = "ir.compiler_ownership"
 IR_UNKNOWN_TYPE = "ir.unknown_type"
 IR_UNKNOWN_PATTERN = "ir.unknown_pattern"
+IR_REGISTRY_EVENT = "ir.registry_event"
 IR_POLICY_LAYER = "ir.policy_layer"
 IR_FLOW_REFERENCE = "ir.flow_reference"
 IR_COMPILER_LOCK_INVALID = "ir.compiler_lock_invalid"
@@ -292,6 +293,12 @@ def _validate_cross_file_rules(
     }
     unit_ids = set(units_by_id)
     contract_ids = set(contracts_by_id)
+    registry_unit_ids = {
+        unit_id
+        for unit_id, unit in units_by_id.items()
+        if unit.get("kind") == "registry"
+    }
+    registry_event_owners: Dict[str, List[str]] = {}
 
     managed_unit_files: Dict[str, str] = {}
     for unit in units:
@@ -335,6 +342,17 @@ def _validate_cross_file_rules(
                     _path_with_fragment(unit_path, "patterns"),
                     f"unknown unit pattern '{pattern_name}'",
                 )
+
+        event_names = _as_string_list(unit.get("events"))
+        if event_names and unit.get("kind") != "registry":
+            report.add(
+                IR_REGISTRY_EVENT,
+                _path_with_fragment(unit_path, "events"),
+                f"unit '{unit_id}' must have kind 'registry' to declare events",
+            )
+        if unit_id and unit.get("kind") == "registry":
+            for event_name in event_names:
+                registry_event_owners.setdefault(event_name, []).append(unit_id)
 
     ownership_unit_files = _as_mapping(ownership_doc.get("unit_files"))
     flattened_ownership: Dict[str, str] = {}
@@ -557,6 +575,7 @@ def _validate_cross_file_rules(
         flow_path = _document_path(flow)
         trigger = _as_mapping(flow.get("trigger"))
         trigger_unit = _as_string(trigger.get("unit"))
+        current_unit = trigger_unit
         if trigger_unit and trigger_unit not in unit_ids:
             report.add(
                 IR_FLOW_REFERENCE,
@@ -589,42 +608,70 @@ def _validate_cross_file_rules(
             if not isinstance(step, Mapping):
                 continue
             call_target = _as_string(step.get("call"))
-            if not call_target:
+            if call_target:
+                unit_prefix, separator, method_name = call_target.partition(".")
+                if not separator or not unit_prefix or not method_name:
+                    report.add(
+                        IR_FLOW_REFERENCE,
+                        _path_with_fragment(flow_path, "steps", step_index, "call"),
+                        f"flow call '{call_target}' must be in '<unit>.<method>' form",
+                    )
+                    continue
+
+                if unit_prefix not in unit_ids:
+                    report.add(
+                        IR_FLOW_REFERENCE,
+                        _path_with_fragment(flow_path, "steps", step_index, "call"),
+                        f"unknown flow call target '{call_target}'",
+                    )
+                    continue
+
+                unit_contract_methods = {
+                    contract_method_name
+                    for contract_id in _as_string_list(units_by_id[unit_prefix].get("provides"))
+                    for method in _as_list(contracts_by_id.get(contract_id, {}).get("methods"))
+                    if isinstance(method, Mapping)
+                    if (contract_method_name := _as_string(method.get("name"))) is not None
+                }
+                if unit_contract_methods and method_name not in unit_contract_methods:
+                    report.add(
+                        IR_FLOW_REFERENCE,
+                        _path_with_fragment(flow_path, "steps", step_index, "call"),
+                        (
+                            f"flow call '{call_target}' does not match any provided contract "
+                            f"method on unit '{unit_prefix}'"
+                        ),
+                    )
+                current_unit = unit_prefix
                 continue
 
-            unit_prefix, separator, method_name = call_target.partition(".")
-            if not separator or not unit_prefix or not method_name:
-                report.add(
-                    IR_FLOW_REFERENCE,
-                    _path_with_fragment(flow_path, "steps", step_index, "call"),
-                    f"flow call '{call_target}' must be in '<unit>.<method>' form",
-                )
-                continue
-
-            if unit_prefix not in unit_ids:
-                report.add(
-                    IR_FLOW_REFERENCE,
-                    _path_with_fragment(flow_path, "steps", step_index, "call"),
-                    f"unknown flow call target '{call_target}'",
-                )
-                continue
-
-            unit_contract_methods = {
-                contract_method_name
-                for contract_id in _as_string_list(units_by_id[unit_prefix].get("provides"))
-                for method in _as_list(contracts_by_id.get(contract_id, {}).get("methods"))
-                if isinstance(method, Mapping)
-                if (contract_method_name := _as_string(method.get("name"))) is not None
-            }
-            if unit_contract_methods and method_name not in unit_contract_methods:
-                report.add(
-                    IR_FLOW_REFERENCE,
-                    _path_with_fragment(flow_path, "steps", step_index, "call"),
-                    (
-                        f"flow call '{call_target}' does not match any provided contract "
-                        f"method on unit '{unit_prefix}'"
-                    ),
-                )
+            event_name = _as_string(step.get("emit"))
+            if event_name:
+                owner_units = sorted(registry_event_owners.get(event_name, []))
+                if not owner_units:
+                    report.add(
+                        IR_REGISTRY_EVENT,
+                        _path_with_fragment(flow_path, "steps", step_index, "emit"),
+                        f"unknown registry event '{event_name}'",
+                    )
+                    continue
+                if current_unit and current_unit in units_by_id:
+                    reachable_registry_units = {
+                        unit_id
+                        for unit_id in _as_string_list(units_by_id[current_unit].get("requires"))
+                        if unit_id in registry_unit_ids
+                    }
+                    if current_unit in registry_unit_ids:
+                        reachable_registry_units.add(current_unit)
+                    if not reachable_registry_units.intersection(owner_units):
+                        report.add(
+                            IR_REGISTRY_EVENT,
+                            _path_with_fragment(flow_path, "steps", step_index, "emit"),
+                            (
+                                f"unit '{current_unit}' cannot emit registry event '{event_name}' "
+                                f"without depending on one of: {', '.join(owner_units)}"
+                            ),
+                        )
 
 
 def _check_unique_ids(

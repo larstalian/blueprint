@@ -92,6 +92,7 @@
     ],
     "units": [
       {
+        "events": [],
         "files": [
           "app/audit/logger.py"
         ],
@@ -109,6 +110,9 @@
         "tests": []
       },
       {
+        "events": [
+          "payment_authorized"
+        ],
         "files": [
           "app/events/bus.py"
         ],
@@ -126,6 +130,7 @@
         "tests": []
       },
       {
+        "events": [],
         "files": [
           "app/payments/gateway.py"
         ],
@@ -143,6 +148,7 @@
         "tests": []
       },
       {
+        "events": [],
         "files": [
           "app/payments/service.py"
         ],

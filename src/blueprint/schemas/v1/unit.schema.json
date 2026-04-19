@@ -52,6 +52,14 @@
         "minLength": 1
       }
     },
+    "events": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "provides": {
       "type": "array",
       "uniqueItems": true,

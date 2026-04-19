@@ -1,0 +1,17 @@
+id: registry_event_mismatch
+patterns:
+  - flow.emit
+  - unit.registry
+expect:
+  validate:
+    ok: false
+    diagnostics:
+      - code: ir.registry_event
+        path: .arch/flows/checkout_flow.yaml#steps.1.emit
+        message: unknown registry event 'payment_refunded'
+  create_revision:
+    ok: false
+    diagnostics:
+      - code: ir.registry_event
+        path: .arch/flows/checkout_flow.yaml#steps.1.emit
+        message: unknown registry event 'payment_refunded'

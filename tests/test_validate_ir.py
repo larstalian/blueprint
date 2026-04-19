@@ -210,6 +210,105 @@ def test_validate_ir_rejects_unknown_flow_call_method(tmp_path: Path) -> None:
     assert any("does not match any provided contract method" in item.message for item in report.diagnostics)
 
 
+def test_validate_ir_rejects_unknown_registry_event(tmp_path: Path) -> None:
+    write_minimal_repo(tmp_path)
+    write_file(
+        tmp_path / ".arch/flows/checkout_flow.yaml",
+        """
+        id: checkout_flow
+        trigger:
+          type: call
+          unit: payment_service
+          contract: payment_authorizer
+        steps:
+          - call: payment_service.authorize
+          - emit: payment_refunded
+        """,
+    )
+
+    report = validate_ir(tmp_path)
+
+    assert not report.ok
+    assert any("unknown registry event 'payment_refunded'" in item.message for item in report.diagnostics)
+
+
+def test_validate_ir_rejects_emit_without_registry_dependency(tmp_path: Path) -> None:
+    write_minimal_repo(tmp_path)
+    write_file(
+        tmp_path / ".arch/units/payment_service.yaml",
+        """
+        id: payment_service
+        kind: service
+        language: python
+        generation_mode: managed
+        layer: service
+        files:
+          - app/payments/service.py
+        provides:
+          - payment_authorizer
+        requires:
+          - payment_gateway
+          - audit_logger
+        patterns:
+          - constructor_injection
+          - protocol_contract
+        tests:
+          - tests/unit/payments/test_service.py
+          - tests/contracts/test_payment_authorizer.py
+        policies:
+          side_effects:
+            network: true
+            filesystem: false
+          concurrency: sync
+        """,
+    )
+
+    report = validate_ir(tmp_path)
+
+    assert not report.ok
+    assert any("cannot emit registry event 'payment_authorized'" in item.message for item in report.diagnostics)
+
+
+def test_validate_ir_rejects_non_registry_event_declaration(tmp_path: Path) -> None:
+    write_minimal_repo(tmp_path)
+    write_file(
+        tmp_path / ".arch/units/payment_service.yaml",
+        """
+        id: payment_service
+        kind: service
+        language: python
+        generation_mode: managed
+        layer: service
+        files:
+          - app/payments/service.py
+        events:
+          - payment_authorized
+        provides:
+          - payment_authorizer
+        requires:
+          - payment_gateway
+          - audit_logger
+          - event_bus
+        patterns:
+          - constructor_injection
+          - protocol_contract
+        tests:
+          - tests/unit/payments/test_service.py
+          - tests/contracts/test_payment_authorizer.py
+        policies:
+          side_effects:
+            network: true
+            filesystem: false
+          concurrency: sync
+        """,
+    )
+
+    report = validate_ir(tmp_path)
+
+    assert not report.ok
+    assert any("must have kind 'registry' to declare events" in item.message for item in report.diagnostics)
+
+
 def test_validate_ir_keeps_cross_file_checks_when_schema_errors_exist(tmp_path: Path) -> None:
     write_minimal_repo(tmp_path)
     write_file(
@@ -334,6 +433,8 @@ def write_minimal_repo(root: Path) -> None:
         layer: infra
         files:
           - app/events/bus.py
+        events:
+          - payment_authorized
         """,
     )
     write_file(

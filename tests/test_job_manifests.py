@@ -39,7 +39,7 @@ def test_write_job_manifests_writes_expected_files(tmp_path: Path) -> None:
         '    "app/payments/models.py",\n'
         '    "tests/contracts/test_payment_authorizer.py"\n'
         '  ],\n'
-        '  "revision_id": "fba3f7bc2ce6df87fb10a5155dd07bfcf2085d80eaa7a33308bfe8625bd5da21"\n'
+        '  "revision_id": "08d7d47f858b3c07a0549230a297ca2d2355b67f846dedfb83dd69c1f7e172a3"\n'
         '}\n'
     )
     assert (
@@ -64,7 +64,7 @@ def test_write_job_manifests_writes_expected_files(tmp_path: Path) -> None:
         '    "event_bus",\n'
         '    "payment_gateway"\n'
         '  ],\n'
-        '  "revision_id": "fba3f7bc2ce6df87fb10a5155dd07bfcf2085d80eaa7a33308bfe8625bd5da21",\n'
+        '  "revision_id": "08d7d47f858b3c07a0549230a297ca2d2355b67f846dedfb83dd69c1f7e172a3",\n'
         '  "tests": [\n'
         '    "tests/contracts/test_payment_authorizer.py",\n'
         '    "tests/unit/payments/test_service.py"\n'

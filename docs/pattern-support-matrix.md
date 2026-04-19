@@ -14,7 +14,7 @@ These are the pattern labels used in conformance cases to describe what a fixtur
 | --- | --- | --- |
 | `unit.service` | `real` | Unit kind with planning, ownership, and dependency semantics. |
 | `unit.adapter` | `real` | Unit kind with planning, ownership, and dependency semantics. |
-| `unit.registry` | `metadata` | Known unit boundary only. No registry-specific compiler or verifier behavior. |
+| `unit.registry` | `real` | Registry units declare named events that flows may emit. |
 | `unit.hook` | `metadata` | Known unit boundary only. No hook-specific compiler or verifier behavior. |
 | `unit.event_handler` | `metadata` | Known unit boundary only. No event-handler-specific compiler or verifier behavior. |
 | `unit.task` | `metadata` | Known unit boundary only. No task-specific compiler or verifier behavior. |
@@ -23,7 +23,7 @@ These are the pattern labels used in conformance cases to describe what a fixtur
 | `model.dataclass` | `real` | Compiled and verified as a Python dataclass model. |
 | `model.typed_dict` | `real` | Compiled as a Python `TypedDict` model. |
 | `flow.call` | `real` | Validated against unit and provided contract method names. |
-| `flow.emit` | `metadata` | Flow syntax only. Event emission semantics are not enforced yet. |
+| `flow.emit` | `real` | Validated against declared registry events and registry dependencies. |
 | `flow.subscribe` | `metadata` | Flow syntax only. Subscription semantics are not enforced yet. |
 | `policy.layer_rules` | `real` | Layer dependency rules are enforced during IR validation. |
 | `ownership.compiler_files` | `real` | Compiler-owned file boundaries are enforced during IR validation. |
@@ -60,4 +60,5 @@ These are not modeled as first-class backend patterns today:
 
 - Composition is supported implicitly through unit boundaries, contracts, flows, and ownership. It is not a standalone pattern identifier.
 - General inheritance is not supported. The only narrow supported inheritance case is contract emission as `ABC`.
-- Registries and hooks are known names in the IR, but still metadata. The backend does not yet parse, emit, or verify their runtime semantics.
+- Registries are now real only in the narrow sense that registry units declare named events and flow emission is checked against them.
+- Hooks are still metadata. The backend does not yet parse, emit, or verify hook runtime semantics.

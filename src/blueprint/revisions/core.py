@@ -122,7 +122,7 @@ def _normalize_entity(kind: str, document: Mapping[str, Any]) -> Dict[str, Any]:
     normalized["identity"] = _build_identity(kind, normalized)
 
     if kind == "unit":
-        for key in ("files", "provides", "requires", "patterns", "tests"):
+        for key in ("events", "files", "provides", "requires", "patterns", "tests"):
             normalized[key] = sorted(_as_string_list(normalized.get(key)))
     elif kind == "contract":
         normalized["methods"] = [

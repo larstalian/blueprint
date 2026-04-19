@@ -5,4 +5,5 @@ generation_mode: opaque
 layer: infra
 files:
   - app/events/bus.py
-
+events:
+  - payment_authorized
