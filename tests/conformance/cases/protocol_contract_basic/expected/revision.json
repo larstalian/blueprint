@@ -22,6 +22,28 @@
         ],
         "module": "app/payments/contracts.py",
         "symbol": "PaymentAuthorizer"
+      },
+      {
+        "id": "payment_gateway_contract",
+        "identity": {
+          "entity_id": "contract:payment_gateway_contract",
+          "symbol_id": "python:app/payments/contracts.py:PaymentGateway"
+        },
+        "kind": "protocol",
+        "methods": [
+          {
+            "name": "authorize",
+            "params": [
+              {
+                "name": "request",
+                "type": "PaymentRequest"
+              }
+            ],
+            "returns": "PaymentResult"
+          }
+        ],
+        "module": "app/payments/contracts.py",
+        "symbol": "PaymentGateway"
       }
     ],
     "data_models": [
@@ -92,6 +114,7 @@
     ],
     "units": [
       {
+        "consumes": [],
         "files": [
           "app/audit/logger.py"
         ],
@@ -109,6 +132,7 @@
         "tests": []
       },
       {
+        "consumes": [],
         "files": [
           "app/events/bus.py"
         ],
@@ -126,6 +150,7 @@
         "tests": []
       },
       {
+        "consumes": [],
         "files": [
           "app/payments/gateway.py"
         ],
@@ -138,11 +163,16 @@
         "language": "python",
         "layer": "infra",
         "patterns": [],
-        "provides": [],
+        "provides": [
+          "payment_gateway_contract"
+        ],
         "requires": [],
         "tests": []
       },
       {
+        "consumes": [
+          "payment_gateway_contract"
+        ],
         "files": [
           "app/payments/service.py"
         ],
@@ -170,8 +200,7 @@
         ],
         "requires": [
           "audit_logger",
-          "event_bus",
-          "payment_gateway"
+          "event_bus"
         ],
         "tests": [
           "tests/contracts/test_payment_authorizer.py",
@@ -184,7 +213,8 @@
     "compiler_files": [
       "app/payments/contracts.py",
       "app/payments/models.py",
-      "tests/contracts/test_payment_authorizer.py"
+      "tests/contracts/test_payment_authorizer.py",
+      "tests/contracts/test_payment_gateway_contract.py"
     ],
     "unit_files": {
       "payment_service": [

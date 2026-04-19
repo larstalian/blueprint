@@ -123,8 +123,9 @@ files:
   - app/payments/service.py
 provides:
   - payment_authorizer
+consumes:
+  - payment_gateway_contract
 requires:
-  - payment_gateway
   - audit_logger
   - event_bus
 patterns:
@@ -151,6 +152,7 @@ Required fields:
 Optional fields:
 
 - `provides`
+- `consumes`
 - `requires`
 - `patterns`
 - `tests`
@@ -159,6 +161,9 @@ Optional fields:
 Rules:
 
 - `files` is the canonical ownership boundary in v1.
+- `consumes` is the canonical contract dependency field.
+- every consumed contract must resolve to exactly one provider unit in v1.
+- `requires` is the fallback for unit-level or opaque dependencies that are not modeled as contracts yet.
 - A file can be owned by one managed unit only.
 - `generation_mode` must be one of:
   - `managed`

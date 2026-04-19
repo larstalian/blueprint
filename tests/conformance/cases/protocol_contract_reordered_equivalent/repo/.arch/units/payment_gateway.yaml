@@ -5,4 +5,5 @@ generation_mode: opaque
 layer: infra
 files:
   - app/payments/gateway.py
-
+provides:
+  - payment_gateway_contract

@@ -68,6 +68,14 @@
         "minLength": 1
       }
     },
+    "consumes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "patterns": {
       "type": "array",
       "uniqueItems": true,

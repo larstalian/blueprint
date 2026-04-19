@@ -9,3 +9,8 @@ from app.payments.models import PaymentRequest, PaymentResult
 class PaymentAuthorizer(ABC):
     @abstractmethod
     def authorize(self, request: PaymentRequest) -> PaymentResult: ...
+
+
+class PaymentGateway(ABC):
+    @abstractmethod
+    def authorize(self, request: PaymentRequest) -> PaymentResult: ...

@@ -83,6 +83,78 @@ def test_validate_ir_rejects_unknown_contract_type_reference(tmp_path: Path) -> 
     assert any("unknown type 'MissingRequest'" in item.message for item in report.diagnostics)
 
 
+def test_validate_ir_rejects_unknown_consumed_contract(tmp_path: Path) -> None:
+    write_minimal_repo(tmp_path)
+    write_file(
+        tmp_path / ".arch/units/payment_service.yaml",
+        """
+        id: payment_service
+        kind: service
+        language: python
+        generation_mode: managed
+        layer: service
+        files:
+          - app/payments/service.py
+        provides:
+          - payment_authorizer
+        consumes:
+          - missing_contract
+        requires:
+          - audit_logger
+          - event_bus
+        """,
+    )
+
+    report = validate_ir(tmp_path)
+
+    assert not report.ok
+    assert any("unknown consumed contract 'missing_contract'" in item.message for item in report.diagnostics)
+
+
+def test_validate_ir_rejects_consumed_contract_without_provider(tmp_path: Path) -> None:
+    write_minimal_repo(tmp_path)
+    write_file(
+        tmp_path / ".arch/units/payment_gateway.yaml",
+        """
+        id: payment_gateway
+        kind: adapter
+        language: python
+        generation_mode: opaque
+        layer: infra
+        files:
+          - app/payments/gateway.py
+        """,
+    )
+
+    report = validate_ir(tmp_path)
+
+    assert not report.ok
+    assert any("is not provided by any unit" in item.message for item in report.diagnostics)
+
+
+def test_validate_ir_rejects_consumed_contract_with_multiple_providers(tmp_path: Path) -> None:
+    write_minimal_repo(tmp_path)
+    write_file(
+        tmp_path / ".arch/units/audit_logger.yaml",
+        """
+        id: audit_logger
+        kind: adapter
+        language: python
+        generation_mode: observed
+        layer: infra
+        files:
+          - app/audit/logger.py
+        provides:
+          - payment_gateway_contract
+        """,
+    )
+
+    report = validate_ir(tmp_path)
+
+    assert not report.ok
+    assert any("must be provided by exactly one unit" in item.message for item in report.diagnostics)
+
+
 def test_validate_ir_rejects_disallowed_layer_dependency(tmp_path: Path) -> None:
     write_minimal_repo(tmp_path)
     write_file(
@@ -95,13 +167,15 @@ def test_validate_ir_rejects_disallowed_layer_dependency(tmp_path: Path) -> None
         layer: service
         files:
           - app/payments/gateway.py
+        provides:
+          - payment_gateway_contract
         """,
     )
 
     report = validate_ir(tmp_path)
 
     assert not report.ok
-    assert any("cannot depend on" in item.message for item in report.diagnostics)
+    assert any("cannot consume contract" in item.message for item in report.diagnostics)
 
 
 def test_validate_ir_rejects_missing_dependency_rule_for_used_layer(tmp_path: Path) -> None:
@@ -283,8 +357,9 @@ def write_minimal_repo(root: Path) -> None:
           - app/payments/service.py
         provides:
           - payment_authorizer
+        consumes:
+          - payment_gateway_contract
         requires:
-          - payment_gateway
           - audit_logger
           - event_bus
         patterns:
@@ -310,6 +385,8 @@ def write_minimal_repo(root: Path) -> None:
         layer: infra
         files:
           - app/payments/gateway.py
+        provides:
+          - payment_gateway_contract
         """,
     )
     write_file(
@@ -343,6 +420,21 @@ def write_minimal_repo(root: Path) -> None:
         kind: protocol
         module: app/payments/contracts.py
         symbol: PaymentAuthorizer
+        methods:
+          - name: authorize
+            params:
+              - name: request
+                type: PaymentRequest
+            returns: PaymentResult
+        """,
+    )
+    write_file(
+        root / ".arch/contracts/payment_gateway.yaml",
+        """
+        id: payment_gateway_contract
+        kind: protocol
+        module: app/payments/contracts.py
+        symbol: PaymentGateway
         methods:
           - name: authorize
             params:
@@ -403,6 +495,7 @@ def write_minimal_repo(root: Path) -> None:
           - app/payments/contracts.py
           - app/payments/models.py
           - tests/contracts/test_payment_authorizer.py
+          - tests/contracts/test_payment_gateway_contract.py
         """,
     )
     write_file(

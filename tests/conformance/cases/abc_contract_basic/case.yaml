@@ -1,23 +1,24 @@
 id: abc_contract_basic
 patterns:
-  - contract.abc
-  - model.dataclass
-  - unit.service
-  - policy.layer_rules
+- contract.abc
+- model.dataclass
+- unit.service
+- policy.layer_rules
 expect:
   validate:
     ok: true
   create_revision:
     ok: true
-    revision_id: f7c194963eec0047993993e2081049244ece8301fe52ea1286d0a7d2029ee533
+    revision_id: 9310d8bb0054b8ffde5f3b0d886d2c00b8fe783536c3edca745a2e8196157454
   plan:
     ok: true
   compile:
     ok: true
     emitted_files:
-      - app/payments/contracts.py
-      - app/payments/models.py
-      - tests/contracts/test_payment_authorizer.py
+    - app/payments/contracts.py
+    - app/payments/models.py
+    - tests/contracts/test_payment_authorizer.py
+    - tests/contracts/test_payment_gateway_contract.py
   verify:
     ok: true
     repo_state: compiled

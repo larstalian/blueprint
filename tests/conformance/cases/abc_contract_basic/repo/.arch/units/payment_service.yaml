@@ -7,10 +7,9 @@ files:
   - app/payments/service.py
 provides:
   - payment_authorizer
-requires:
-  - payment_gateway
+consumes:
+  - payment_gateway_contract
 patterns:
   - constructor_injection
 tests:
   - tests/contracts/test_payment_authorizer.py
-
