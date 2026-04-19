@@ -46,6 +46,7 @@ IR_SCHEMA_VIOLATION = "ir.schema_violation"
 IR_DUPLICATE_ID = "ir.duplicate_id"
 IR_UNKNOWN_CONTRACT = "ir.unknown_contract"
 IR_UNKNOWN_UNIT = "ir.unknown_unit"
+IR_CONTRACT_PROVIDER = "ir.contract_provider"
 IR_OWNERSHIP_CONFLICT = "ir.ownership_conflict"
 IR_OWNERSHIP_MISMATCH = "ir.ownership_mismatch"
 IR_COMPILER_OWNERSHIP = "ir.compiler_ownership"
@@ -302,6 +303,7 @@ def _validate_cross_file_rules(
     duplicate_registry_events: set[str] = set()
 
     managed_unit_files: Dict[str, str] = {}
+    contract_providers: Dict[str, List[str]] = {}
     for unit in units:
         unit_path = _document_path(unit)
         unit_id = _as_string(unit.get("id"))
@@ -326,6 +328,16 @@ def _validate_cross_file_rules(
                     IR_UNKNOWN_CONTRACT,
                     unit_path,
                     f"unknown provided contract '{contract_id}'",
+                )
+                continue
+            contract_providers.setdefault(contract_id, []).append(unit_id)
+
+        for contract_index, contract_id in enumerate(_as_string_list(unit.get("consumes"))):
+            if contract_id not in contract_ids:
+                report.add(
+                    IR_UNKNOWN_CONTRACT,
+                    _path_with_fragment(unit_path, "consumes", contract_index),
+                    f"unknown consumed contract '{contract_id}'",
                 )
 
         for dependency_id in _as_string_list(unit.get("requires")):
@@ -352,16 +364,16 @@ def _validate_cross_file_rules(
                 f"unit '{unit_id}' must have kind 'registry' to declare events",
             )
         if unit_id and unit.get("kind") == "registry":
-            for event_name in event_names:
+            for event_index, event_name in enumerate(event_names):
                 owner = registry_event_owners.get(event_name)
                 if owner is not None:
                     duplicate_registry_events.add(event_name)
                     report.add(
                         IR_REGISTRY_EVENT,
-                        _path_with_fragment(unit_path, "events"),
+                        _path_with_fragment(unit_path, "events", event_index),
                         (
-                            f"registry event '{event_name}' is already declared by "
-                            f"registry unit '{owner}'"
+                            f"registry event '{event_name}' must be globally unique; "
+                            f"already declared by registry unit '{owner}'"
                         ),
                     )
                     continue
@@ -581,6 +593,48 @@ def _validate_cross_file_rules(
                     (
                         f"unit '{unit_id}' in layer '{unit_layer}' cannot depend on "
                         f"'{dependency_id}' in layer '{dependency_layer}'"
+                    ),
+                )
+
+        for contract_index, contract_id in enumerate(_as_string_list(unit.get("consumes"))):
+            if contract_id not in contract_ids:
+                continue
+
+            provider_ids = sorted(contract_providers.get(contract_id, []))
+            if not provider_ids:
+                report.add(
+                    IR_CONTRACT_PROVIDER,
+                    _path_with_fragment(unit_path, "consumes", contract_index),
+                    f"consumed contract '{contract_id}' is not provided by any unit",
+                )
+                continue
+            if len(provider_ids) > 1:
+                report.add(
+                    IR_CONTRACT_PROVIDER,
+                    _path_with_fragment(unit_path, "consumes", contract_index),
+                    (
+                        f"consumed contract '{contract_id}' must be provided by exactly one unit, "
+                        f"found: {', '.join(provider_ids)}"
+                    ),
+                )
+                continue
+
+            provider_id = provider_ids[0]
+            provider_layer = unit_layers.get(provider_id)
+            if not provider_layer:
+                report.add(
+                    IR_POLICY_LAYER,
+                    _path_with_fragment(unit_path, "consumes", contract_index),
+                    f"provider unit '{provider_id}' for contract '{contract_id}' is missing a layer",
+                )
+                continue
+            if provider_layer not in allowed_target_layers:
+                report.add(
+                    IR_POLICY_LAYER,
+                    _path_with_fragment(unit_path, "consumes", contract_index),
+                    (
+                        f"unit '{unit_id}' in layer '{unit_layer}' cannot consume contract "
+                        f"'{contract_id}' from unit '{provider_id}' in layer '{provider_layer}'"
                     ),
                 )
 

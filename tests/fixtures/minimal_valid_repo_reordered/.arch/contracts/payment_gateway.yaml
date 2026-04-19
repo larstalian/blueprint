@@ -1,0 +1,10 @@
+id: payment_gateway_contract
+kind: protocol
+module: app/payments/contracts.py
+symbol: PaymentGateway
+methods:
+  - name: authorize
+    params:
+      - name: request
+        type: PaymentRequest
+    returns: PaymentResult

@@ -7,7 +7,7 @@
           "entity_id": "contract:payment_authorizer",
           "symbol_id": "python:app/payments/contracts.py:PaymentAuthorizer"
         },
-        "kind": "protocol",
+        "kind": "abc",
         "methods": [
           {
             "name": "authorize",
@@ -29,7 +29,7 @@
           "entity_id": "contract:payment_gateway_contract",
           "symbol_id": "python:app/payments/contracts.py:PaymentGateway"
         },
-        "kind": "protocol",
+        "kind": "abc",
         "methods": [
           {
             "name": "authorize",
@@ -97,12 +97,6 @@
         "steps": [
           {
             "call": "payment_service.authorize"
-          },
-          {
-            "emit": "payment_authorized"
-          },
-          {
-            "call": "audit_logger.record"
           }
         ],
         "trigger": {
@@ -113,46 +107,6 @@
       }
     ],
     "units": [
-      {
-        "consumes": [],
-        "events": [],
-        "files": [
-          "app/audit/logger.py"
-        ],
-        "generation_mode": "observed",
-        "id": "audit_logger",
-        "identity": {
-          "entity_id": "unit:audit_logger"
-        },
-        "kind": "adapter",
-        "language": "python",
-        "layer": "infra",
-        "patterns": [],
-        "provides": [],
-        "requires": [],
-        "tests": []
-      },
-      {
-        "consumes": [],
-        "events": [
-          "payment_authorized"
-        ],
-        "files": [
-          "app/events/bus.py"
-        ],
-        "generation_mode": "opaque",
-        "id": "event_bus",
-        "identity": {
-          "entity_id": "unit:event_bus"
-        },
-        "kind": "registry",
-        "language": "python",
-        "layer": "infra",
-        "patterns": [],
-        "provides": [],
-        "requires": [],
-        "tests": []
-      },
       {
         "consumes": [],
         "events": [],
@@ -191,26 +145,14 @@
         "language": "python",
         "layer": "service",
         "patterns": [
-          "constructor_injection",
-          "protocol_contract"
+          "constructor_injection"
         ],
-        "policies": {
-          "concurrency": "sync",
-          "side_effects": {
-            "filesystem": false,
-            "network": true
-          }
-        },
         "provides": [
           "payment_authorizer"
         ],
-        "requires": [
-          "audit_logger",
-          "event_bus"
-        ],
+        "requires": [],
         "tests": [
-          "tests/contracts/test_payment_authorizer.py",
-          "tests/unit/payments/test_service.py"
+          "tests/contracts/test_payment_authorizer.py"
         ]
       }
     ]

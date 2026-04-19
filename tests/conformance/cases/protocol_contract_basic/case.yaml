@@ -13,7 +13,7 @@ expect:
     ok: true
   create_revision:
     ok: true
-    revision_id: 08d7d47f858b3c07a0549230a297ca2d2355b67f846dedfb83dd69c1f7e172a3
+    revision_id: 8015904da6a8907a46c6859f842a68fdd1fe0604180d5b942a03b3c83c0b1b99
   plan:
     ok: true
   compile:
@@ -22,6 +22,7 @@ expect:
       - app/payments/contracts.py
       - app/payments/models.py
       - tests/contracts/test_payment_authorizer.py
+      - tests/contracts/test_payment_gateway_contract.py
   verify:
     ok: true
     repo_state: compiled

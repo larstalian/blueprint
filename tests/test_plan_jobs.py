@@ -30,6 +30,7 @@ def test_plan_jobs_emits_compile_and_managed_unit_jobs() -> None:
                     "app/payments/contracts.py",
                     "app/payments/models.py",
                     "tests/contracts/test_payment_authorizer.py",
+                    "tests/contracts/test_payment_gateway_contract.py",
                 ],
             },
             {
@@ -38,7 +39,7 @@ def test_plan_jobs_emits_compile_and_managed_unit_jobs() -> None:
                 "kind": "implement_unit",
                 "owned_files": ["app/payments/service.py"],
                 "provided_contracts": ["payment_authorizer"],
-                "required_contracts": [],
+                "required_contracts": ["payment_gateway_contract"],
                 "required_units": ["audit_logger", "event_bus", "payment_gateway"],
                 "tests": [
                     "tests/contracts/test_payment_authorizer.py",
@@ -85,3 +86,72 @@ def test_plan_jobs_can_target_subset_of_managed_units(tmp_path: Path) -> None:
         "compile:compiler_owned",
         "unit:notification_service",
     ]
+
+
+def test_plan_jobs_keeps_explicit_managed_requires_as_dependencies(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    shutil.copytree(FIXTURES_ROOT / "minimal_valid_repo", repo_root)
+
+    gateway_path = repo_root / ".arch/units/payment_gateway.yaml"
+    gateway = yaml.safe_load(gateway_path.read_text(encoding="utf-8"))
+    gateway["generation_mode"] = "managed"
+    gateway_path.write_text(yaml.safe_dump(gateway, sort_keys=False), encoding="utf-8")
+
+    service_path = repo_root / ".arch/units/payment_service.yaml"
+    service = yaml.safe_load(service_path.read_text(encoding="utf-8"))
+    service["requires"] = ["payment_gateway", "audit_logger", "event_bus"]
+    service_path.write_text(yaml.safe_dump(service, sort_keys=False), encoding="utf-8")
+
+    ownership_path = repo_root / ".arch/ownership.yaml"
+    ownership = yaml.safe_load(ownership_path.read_text(encoding="utf-8"))
+    ownership["unit_files"]["payment_gateway"] = ["app/payments/gateway.py"]
+    ownership_path.write_text(yaml.safe_dump(ownership, sort_keys=False), encoding="utf-8")
+
+    plan = plan_jobs(repo_root, target_units=["payment_service"])
+
+    assert [job["job_id"] for job in plan.snapshot["jobs"]] == [
+        "compile:compiler_owned",
+        "unit:payment_gateway",
+        "unit:payment_service",
+    ]
+    assert plan.snapshot["jobs"][2]["depends_on"] == [
+        "compile:compiler_owned",
+        "unit:payment_gateway",
+    ]
+
+
+def test_plan_jobs_does_not_expand_targets_through_consumed_contracts(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    shutil.copytree(FIXTURES_ROOT / "minimal_valid_repo", repo_root)
+
+    gateway_path = repo_root / ".arch/units/payment_gateway.yaml"
+    gateway = yaml.safe_load(gateway_path.read_text(encoding="utf-8"))
+    gateway["generation_mode"] = "managed"
+    gateway_path.write_text(yaml.safe_dump(gateway, sort_keys=False), encoding="utf-8")
+
+    ownership_path = repo_root / ".arch/ownership.yaml"
+    ownership = yaml.safe_load(ownership_path.read_text(encoding="utf-8"))
+    ownership["unit_files"]["payment_gateway"] = ["app/payments/gateway.py"]
+    ownership_path.write_text(yaml.safe_dump(ownership, sort_keys=False), encoding="utf-8")
+
+    plan = plan_jobs(repo_root, target_units=["payment_service"])
+
+    assert [job["job_id"] for job in plan.snapshot["jobs"]] == [
+        "compile:compiler_owned",
+        "unit:payment_service",
+    ]
+
+
+def test_plan_jobs_keeps_legacy_required_contract_inference(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    shutil.copytree(FIXTURES_ROOT / "minimal_valid_repo", repo_root)
+
+    service_path = repo_root / ".arch/units/payment_service.yaml"
+    service = yaml.safe_load(service_path.read_text(encoding="utf-8"))
+    service.pop("consumes", None)
+    service["requires"] = ["event_bus", "payment_gateway"]
+    service_path.write_text(yaml.safe_dump(service, sort_keys=False), encoding="utf-8")
+
+    plan = plan_jobs(repo_root)
+
+    assert plan.snapshot["jobs"][1]["required_contracts"] == ["payment_gateway_contract"]

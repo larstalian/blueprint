@@ -5,4 +5,4 @@ compiler_files:
   - app/payments/contracts.py
   - app/payments/models.py
   - tests/contracts/test_payment_authorizer.py
-
+  - tests/contracts/test_payment_gateway_contract.py

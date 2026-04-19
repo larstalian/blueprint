@@ -100,10 +100,7 @@ def build_plan_snapshot(
         for unit in units
         if isinstance(unit.get("id"), str)
     }
-    provided_contracts = {
-        unit_id: _as_string_list(unit.get("provides"))
-        for unit_id, unit in units_by_id.items()
-    }
+    provider_units_by_contract = _provider_units_by_contract(units_by_id)
 
     planned_unit_ids = _resolve_planned_units(units_by_id, target_units)
 
@@ -119,18 +116,23 @@ def build_plan_snapshot(
     for unit_id in planned_unit_ids:
         unit = units_by_id[unit_id]
 
-        requires_units = sorted(_as_string_list(unit.get("requires")))
-        required_contracts = sorted(
-            {
-                contract_id
-                for dependency_id in requires_units
-                for contract_id in provided_contracts.get(dependency_id, [])
-            }
-        )
+        explicit_required_units = set(_as_string_list(unit.get("requires")))
+        consumed_contracts = set(_as_string_list(unit.get("consumes")))
+        implied_contracts = {
+            contract_id
+            for dependency_id in explicit_required_units
+            for contract_id in _as_string_list(units_by_id.get(dependency_id, {}).get("provides"))
+        }
+        required_contracts = sorted(consumed_contracts.union(implied_contracts))
+        resolved_provider_units = {
+            _provider_unit_for_contract(contract_id, provider_units_by_contract)
+            for contract_id in consumed_contracts
+        }
+        required_units = sorted(explicit_required_units.union(resolved_provider_units))
         depends_on = ["compile:compiler_owned"]
         depends_on.extend(
             f"unit:{dependency_id}"
-            for dependency_id in requires_units
+            for dependency_id in sorted(explicit_required_units)
             if units_by_id.get(dependency_id, {}).get("generation_mode") == "managed"
         )
 
@@ -142,7 +144,7 @@ def build_plan_snapshot(
                 "owned_files": sorted(_as_string_list(unit.get("files"))),
                 "provided_contracts": sorted(_as_string_list(unit.get("provides"))),
                 "required_contracts": required_contracts,
-                "required_units": requires_units,
+                "required_units": required_units,
                 "tests": sorted(_as_string_list(unit.get("tests"))),
                 "unit_id": unit_id,
                 "unit_kind": unit.get("kind"),
@@ -432,3 +434,28 @@ def _resolve_planned_units(
                 queue.append(dependency_id)
 
     return sorted(planned)
+
+
+def _provider_units_by_contract(
+    units_by_id: Mapping[str, Mapping[str, Any]],
+) -> dict[str, list[str]]:
+    providers: dict[str, list[str]] = {}
+    for unit_id, unit in units_by_id.items():
+        for contract_id in _as_string_list(unit.get("provides")):
+            providers.setdefault(contract_id, []).append(unit_id)
+    return {
+        contract_id: sorted(unit_ids)
+        for contract_id, unit_ids in sorted(providers.items())
+    }
+
+
+def _provider_unit_for_contract(
+    contract_id: str,
+    provider_units_by_contract: Mapping[str, list[str]],
+) -> str:
+    provider_ids = provider_units_by_contract.get(contract_id, [])
+    if len(provider_ids) != 1:
+        raise ValueError(
+            f"contract '{contract_id}' must resolve to exactly one provider, found {len(provider_ids)}"
+        )
+    return provider_ids[0]

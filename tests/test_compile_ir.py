@@ -17,6 +17,7 @@ def test_compile_ir_emits_expected_compiler_owned_files(tmp_path: Path) -> None:
         "app/payments/contracts.py",
         "app/payments/models.py",
         "tests/contracts/test_payment_authorizer.py",
+        "tests/contracts/test_payment_gateway_contract.py",
     )
     assert read_file(repo_root / "app/payments/contracts.py") == read_file(
         FIXTURES_ROOT / "minimal_valid_repo_expected_output/app/payments/contracts.py"
@@ -27,6 +28,10 @@ def test_compile_ir_emits_expected_compiler_owned_files(tmp_path: Path) -> None:
     assert read_file(repo_root / "tests/contracts/test_payment_authorizer.py") == read_file(
         FIXTURES_ROOT
         / "minimal_valid_repo_expected_output/tests/contracts/test_payment_authorizer.py"
+    )
+    assert read_file(repo_root / "tests/contracts/test_payment_gateway_contract.py") == read_file(
+        FIXTURES_ROOT
+        / "minimal_valid_repo_expected_output/tests/contracts/test_payment_gateway_contract.py"
     )
 
 
@@ -46,4 +51,3 @@ def test_compile_ir_is_idempotent(tmp_path: Path) -> None:
 
 def read_file(path: Path) -> str:
     return path.read_text(encoding="utf-8")
-

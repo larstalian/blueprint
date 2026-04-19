@@ -6,11 +6,11 @@ expect:
     ok: false
     diagnostics:
       - code: ir.registry_event
-        path: .arch/units/z_audit_events.yaml#events
-        message: registry event 'payment_authorized' is already declared by registry unit 'event_bus'
+        path: .arch/units/z_audit_events.yaml#events.0
+        message: registry event 'payment_authorized' must be globally unique; already declared by registry unit 'event_bus'
   create_revision:
     ok: false
     diagnostics:
       - code: ir.registry_event
-        path: .arch/units/z_audit_events.yaml#events
-        message: registry event 'payment_authorized' is already declared by registry unit 'event_bus'
+        path: .arch/units/z_audit_events.yaml#events.0
+        message: registry event 'payment_authorized' must be globally unique; already declared by registry unit 'event_bus'
